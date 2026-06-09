@@ -1,0 +1,61 @@
+application:
+  subdomain: kaobuddy
+  background_task: true
+  routes:
+    - /=http://kaobuddy:8080
+  health_check:
+    test_url: http://kaobuddy:8080/health
+    start_period: 30s
+    timeout: 5s
+  injects:
+    - id: kaobuddy-open-save-chooser
+      on: browser
+      when:
+        - /*
+      do:
+        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            diskRoot: /_lzc/files/home
+            fallbackMime: application/octet-stream
+            locale: auto
+            text:
+              zh-CN:
+                openTitle: 打开
+                saveTitle: 保存
+                openLocal: 从本地打开
+                openLazyCat: 从懒猫微服打开
+                saveLocal: 保存至本地
+                saveLazyCat: 保存至懒猫微服
+                cancel: 取消
+              en-US:
+                openTitle: Open
+                saveTitle: Save
+                openLocal: Open from local device
+                openLazyCat: Open from Lazycat MicroServer
+                saveLocal: Save to local device
+                saveLazyCat: Save to Lazycat MicroServer
+                cancel: Cancel
+            hooks:
+              fileSystemAccess: true
+              fileInput: true
+
+services:
+  kaobuddy:
+    image: embed:app-runtime
+    binds:
+      - /lzcapp/var/work:/app/work
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=8080
+      - KAOBUDDY_INVITE_STORE_PATH=/app/work/invites.json
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |-
+          import urllib.request; urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=3)
+      start_period: 30s
+      interval: 20s
+      timeout: 5s
+      retries: 10

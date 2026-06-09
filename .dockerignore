@@ -17,3 +17,8 @@ README.md
 DEPLOY.md
 railway.json
 tests/
+lzc-content/
+release-lpk/
+*.lpk
+.lazycat-image-ref
+.lzc-cli-cache/

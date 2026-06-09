@@ -1,0 +1,20 @@
+package: cloud.lazycat.app.kaobuddy
+version: 1.0.0
+name: KaoBuddy
+description: Exam preparation workspace that turns course materials into plans, drills, mock exams, and quick review cards.
+author: KaoBuddy contributors
+license: MIT
+homepage: https://github.com/jin-zi-xuan/kaobuddy-pwa
+unsupported_platforms:
+  - android
+  - ios
+  - tvos
+locales:
+  zh-CN:
+    name: "考搭子 KaoBuddy"
+    description: "把课件、教材、往年题和笔记整理成学习计划、练习、模考和临考速背卡片的备考工作台。"
+    usage: "打开后先在“连接 AI”里填写自己的 OpenAI-compatible API Key。学习资料、计划和错题默认保存在当前浏览器；服务端仅持久化邀请码用量。上传资料时会提供本地文件和懒猫微服文件两种选择。"
+  en-US:
+    name: "KaoBuddy"
+    description: "An exam preparation workspace that turns course materials into study plans, drills, mock exams, and quick review cards."
+    usage: "Open the app and configure your own OpenAI-compatible API key in the AI connection panel. Study data stays in the current browser by default; the server only persists invite-code usage. File uploads offer both local files and Lazycat MicroServer files."

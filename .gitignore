@@ -13,3 +13,7 @@ work/
 outputs/
 *.pyc
 *.egg-info/
+release-lpk/
+*.lpk
+.lazycat-image-ref
+.lzc-cli-cache/
