@@ -37,6 +37,7 @@ from .prompts import (
     format_materials,
     format_project,
 )
+from .runtime_paths import resolve_runtime_paths
 from .schemas import (
     AiRequest,
     AiResponse,
@@ -58,10 +59,11 @@ from .video import import_video_metadata
 log = get_logger()
 
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-STATIC_DIR = ROOT_DIR / "backend" / "static"
-DIST_DIR = ROOT_DIR / "dist"
-PUBLIC_DIR = ROOT_DIR / "public"
+PATHS = resolve_runtime_paths()
+ROOT_DIR = PATHS.root_dir
+STATIC_DIR = PATHS.static_dir
+DIST_DIR = PATHS.dist_dir
+PUBLIC_DIR = PATHS.public_dir
 
 
 app = FastAPI(title="KaoBuddy API", version="1.0.0")

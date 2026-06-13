@@ -7,7 +7,7 @@
 
 > 之前的 Railway 在线预览因为免费额度用完了，现在不保证能打开。
 >
-> 想用的话建议自己在电脑上跑，或者把这个项目部署到自己的云平台账号里。下面有 Mac 和 Windows 的详细步骤。
+> 普通用户建议直接下载免安装便携包：解压后双击启动，不用自己装 Python 或 Node。
 
 ---
 
@@ -133,33 +133,34 @@
 
 ## 怎么用
 
-### 先说一下在线预览
+### 普通用户：下载免安装包
 
-原来的 Railway 预览地址还留在这里，但免费额度用完时会打不开：
+1. 打开 GitHub Releases：
 
-> **[kaobuddy-preview-production.up.railway.app](https://kaobuddy-preview-production.up.railway.app/)**
+> **[KaoBuddy Releases](https://github.com/jin-zi-xuan/kaobuddy-pwa/releases)**
 
-所以现在更推荐下面两种方式：
-- 自己电脑上跑：适合自己用，最省事。
-- 自己部署到云平台：适合手机、平板、别人也要访问。
+2. 按系统下载：
+   - Windows：`KaoBuddy-Windows.zip`
+   - Mac：`KaoBuddy-macOS.zip`
+3. 解压 zip。
+4. 双击启动：
+   - Windows：`start-kaobuddy.bat`
+   - Mac：`start-kaobuddy.command`
+5. 浏览器会自动打开 `http://127.0.0.1:8000`。填自己的 AI API Key，就能开始用。
 
-### Mac 本地部署
+便携包是本机运行。关闭启动窗口，KaoBuddy 也会停止。
+
+### 源码运行
+
+如果你是开发者，或者想自己从源码启动：
 
 适合只是自己在电脑上用。第一次会慢一点，因为要装依赖和构建页面。
 
-1. 安装 Python 3：<https://www.python.org/downloads/>
-2. 安装 Node.js LTS：<https://nodejs.org/>
-3. 下载项目代码：
+源码启动需要本机已经装好 Python 3 和 Node.js LTS。脚本会自动装依赖、构建页面、启动服务，并打开 `http://127.0.0.1:8000`。
 
-```bash
-git clone https://github.com/jin-zi-xuan/kaobuddy-pwa.git
-cd kaobuddy-pwa
-```
+**Mac**：双击 `open-kaobuddy.command`
 
-不会用 git 的话，也可以在 GitHub 页面点 **Code → Download ZIP**，解压后进入文件夹。
-
-4. 双击 `open-kaobuddy.command`。
-5. 浏览器会打开 `http://127.0.0.1:8000`，看到页面就可以填自己的 API Key 了。
+**Windows**：双击 `open-kaobuddy.bat`
 
 如果 macOS 提示不让打开，可以在终端里执行一次：
 
@@ -167,17 +168,6 @@ cd kaobuddy-pwa
 chmod +x open-kaobuddy.command
 ./open-kaobuddy.command
 ```
-
-### Windows 本地部署
-
-1. 安装 Python 3：<https://www.python.org/downloads/>
-   - 安装时记得勾选 **Add python.exe to PATH**。
-2. 安装 Node.js LTS：<https://nodejs.org/>
-3. 下载项目代码：
-   - 会用 git：`git clone https://github.com/jin-zi-xuan/kaobuddy-pwa.git`
-   - 不会用 git：GitHub 页面点 **Code → Download ZIP**，解压。
-4. 进入项目文件夹，双击 `open-kaobuddy.bat`。
-5. 第一次会自动安装依赖，等浏览器打开 `http://127.0.0.1:8000` 就能用了。
 
 如果双击后窗口一闪而过，通常是 Python 或 Node.js 没装好。可以在项目文件夹空白处右键，选择“在终端中打开”，然后跑：
 

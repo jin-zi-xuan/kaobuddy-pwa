@@ -1,0 +1,63 @@
+name: Portable Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build ${{ matrix.target }} package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            artifact: KaoBuddy-Windows
+          - os: macos-14
+            target: macos
+            artifact: KaoBuddy-macOS
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install Python package dependencies
+        run: python -m pip install -e ".[test]" pyinstaller
+
+      - name: Build portable zip
+        run: python scripts/build_portable_package.py --target ${{ matrix.target }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: outputs/${{ matrix.artifact }}.zip
+
+      - name: Attach package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: outputs/${{ matrix.artifact }}.zip

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import httpx
@@ -6,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from backend.app.ai_client import chat_completion_with_usage, completion_timeout_seconds
 from backend.app.main import app
+from backend.app.portable_launcher import configure_portable_environment
+from backend.app.runtime_paths import resolve_runtime_paths
 from backend.app.schemas import ApiConfig, ChatMessage
 
 
@@ -47,6 +50,39 @@ def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+
+
+def test_runtime_paths_can_be_overridden_for_portable_bundle(tmp_path):
+    root = tmp_path / "bundle"
+    static = root / "backend" / "static"
+    dist = root / "dist"
+    public = root / "public"
+    env = {
+        "KAOBUDDY_ROOT_DIR": str(root),
+        "KAOBUDDY_STATIC_DIR": str(static),
+        "KAOBUDDY_DIST_DIR": str(dist),
+        "KAOBUDDY_PUBLIC_DIR": str(public),
+    }
+
+    paths = resolve_runtime_paths(env=env)
+
+    assert paths.root_dir == root
+    assert paths.static_dir == static
+    assert paths.dist_dir == dist
+    assert paths.public_dir == public
+
+
+def test_portable_launcher_sets_bundle_paths_without_overwriting_existing_values(tmp_path, monkeypatch):
+    root = tmp_path / "bundle"
+    custom_static = tmp_path / "custom-static"
+    monkeypatch.setenv("KAOBUDDY_STATIC_DIR", str(custom_static))
+
+    configure_portable_environment(root)
+
+    assert os.environ["KAOBUDDY_ROOT_DIR"] == str(root)
+    assert os.environ["KAOBUDDY_STATIC_DIR"] == str(custom_static)
+    assert os.environ["KAOBUDDY_DIST_DIR"] == str(root / "dist")
+    assert os.environ["KAOBUDDY_PUBLIC_DIR"] == str(root / "public")
 
 
 def test_api_config_requires_http_base_url():
