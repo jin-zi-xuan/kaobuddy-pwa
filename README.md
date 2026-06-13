@@ -5,9 +5,9 @@
 
 你把课件、教材、往年题、笔记、PDF、手写照片、视频字幕扔进来，剩下的交给 AI——拆知识点、讲重点、出题、批改、生成模拟考、临考速背卡片。自己带 API Key，数据全在浏览器里，目前不搞账号，以后再弄。
 
-> 🚀 **在线预览**：[kaobuddy-preview-production.up.railway.app](https://kaobuddy-preview-production.up.railway.app/)
-> 
-> 打开即用，不用装任何东西。手机电脑都能访问。
+> 之前的 Railway 在线预览因为免费额度用完了，现在不保证能打开。
+>
+> 普通用户建议直接下载免安装便携包：解压后双击启动，不用自己装 Python 或 Node。
 
 ---
 
@@ -133,47 +133,51 @@
 
 ## 怎么用
 
-### 已经部署好了（推荐）
+### 普通用户：下载免安装包
 
-打开即用，啥都不用装：
+1. 打开 GitHub Releases：
 
-> **[kaobuddy-preview-production.up.railway.app](https://kaobuddy-preview-production.up.railway.app/)**
+> **[KaoBuddy Releases](https://github.com/jin-zi-xuan/kaobuddy-pwa/releases)**
 
-考搭子跑在 Railway 上，手机电脑都能访问。
+2. 按系统下载：
+   - Windows：`KaoBuddy-Windows.zip`
+   - Mac：`KaoBuddy-macOS.zip`
+3. 解压 zip。
+4. 双击启动：
+   - Windows：`start-kaobuddy.bat`
+   - Mac：`start-kaobuddy.command`
+5. 浏览器会自动打开 `http://127.0.0.1:8000`。填自己的 AI API Key，就能开始用。
 
-### 自己电脑上跑
+便携包是本机运行。关闭启动窗口，KaoBuddy 也会停止。
+
+### 源码运行
+
+如果你是开发者，或者想自己从源码启动：
 
 **Mac**：双击 `open-kaobuddy.command`
 
 **Windows**：双击 `open-kaobuddy.bat`
 
-脚本会自动装依赖、启动服务、打开 `http://127.0.0.1:8000`。
+源码启动需要本机已经装好 Python 3 和 Node.js LTS。脚本会自动装依赖、构建页面、启动服务，并打开 `http://127.0.0.1:8000`。
 
-### 手动启动
+### 开发者启动
 
 ```bash
-# 后端
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[test]"
-uvicorn backend.app.main:app --port 8000
-
-# 前端开发
 npm install
 npm run dev          # 打开 http://localhost:5173，API 自动代理到 8000
 ```
 
 ### 自己部署
 
+如果想让手机、平板或者别人也能访问，就需要部署到自己的云平台账号里。项目已经带了 Dockerfile、Fly.io 配置和 Railway 启动配置。
+
 ```bash
 # Docker
 docker build -t kaobuddy .
 docker run -p 8080:8080 kaobuddy
-
-# Railway 
-# 项目里已经有 Dockerfile + fly.toml + Procfile
-# 详细步骤见 DEPLOY.md
 ```
+
+Railway 也能部署，但需要用你自己的 Railway 账号和额度。更完整的 Fly.io、Cloudflare Tunnel、Railway 步骤见 [DEPLOY.md](DEPLOY.md)。
 
 ---
 
@@ -252,7 +256,7 @@ python3 -m py_compile backend/app/*.py   # 语法检查
 npx tsc --noEmit                         # 类型检查
 
 # 前端单元测试
-node --import tsx --test tests/frontend/ # 36 个测试
+node --import tsx --test tests/frontend/*.test.ts # 36 个测试
 
 # 构建检查
 npx vite build                           # 确保能正常打包
