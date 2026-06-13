@@ -16,12 +16,17 @@ type AiPayload = AiAuthPayload & {
   extra?: string;
 };
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json().catch(() => ({}));
+const LOCAL_BACKEND_OFFLINE_MESSAGE = "请求没有到达 KaoBuddy 后端，本地后端可能没有启动。请用 npm run dev 启动完整开发环境，或者双击 open-kaobuddy.command / open-kaobuddy.bat。";
+
+export async function parseApiResponse<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(formatApiError(data.detail));
+    if (!data || typeof data !== "object") {
+      throw new Error(LOCAL_BACKEND_OFFLINE_MESSAGE);
+    }
+    throw new Error(formatApiError((data as { detail?: unknown }).detail));
   }
-  return data as T;
+  return (data || {}) as T;
 }
 
 function formatApiError(detail: unknown): string {
@@ -52,7 +57,7 @@ export async function testApiConfig(api_config: ApiConfig): Promise<string> {
       messages: [{ role: "user", content: "请只回复：连接成功" }]
     })
   });
-  const data = await parseResponse<{ content: string }>(response);
+  const data = await parseApiResponse<{ content: string }>(response);
   return data.content;
 }
 
@@ -67,7 +72,7 @@ export async function verifyInviteCode(code: string): Promise<{
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code })
   });
-  return parseResponse(response);
+  return parseApiResponse(response);
 }
 
 export async function runAi(mode: "plan" | "teach" | "practice" | "mock-exam", payload: AiPayload, signal?: AbortSignal): Promise<AiResult> {
@@ -78,7 +83,7 @@ export async function runAi(mode: "plan" | "teach" | "practice" | "mock-exam", p
     body: JSON.stringify(payload),
     signal
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function runMemorize(payload: AiPayload): Promise<AiResult> {
@@ -87,7 +92,7 @@ export async function runMemorize(payload: AiPayload): Promise<AiResult> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function runModulePractice(payload: AiPayload & { module_title: string; exam_points?: string }): Promise<AiResult> {
@@ -96,7 +101,7 @@ export async function runModulePractice(payload: AiPayload & { module_title: str
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function runCards(payload: AiPayload): Promise<AiResult> {
@@ -105,7 +110,7 @@ export async function runCards(payload: AiPayload): Promise<AiResult> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function runCardsStream(
@@ -121,8 +126,7 @@ export async function runCardsStream(
     signal,
   });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(formatApiError(data.detail));
+    await parseApiResponse(response);
   }
   const reader = response.body?.getReader();
   if (!reader) throw new Error("浏览器不支持流式读取。");
@@ -165,7 +169,7 @@ export async function gradeMock(payload: AiAuthPayload & {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function gradePractice(payload: AiAuthPayload & {
@@ -179,7 +183,7 @@ export async function gradePractice(payload: AiAuthPayload & {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function runDailyPlan(payload: AiAuthPayload & {
@@ -193,7 +197,7 @@ export async function runDailyPlan(payload: AiAuthPayload & {
     body: JSON.stringify(payload),
     signal
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }
 
 export async function importVideo(url: string) {
@@ -202,7 +206,7 @@ export async function importVideo(url: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url })
   });
-  return parseResponse<{
+  return parseApiResponse<{
     title: string;
     description: string;
     subtitles: string;
@@ -217,5 +221,5 @@ export async function recognizeHandwriting(auth: AiAuthPayload, image_data_urls:
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...auth, image_data_urls, note_hint })
   });
-  return parseResponse<AiResult>(response);
+  return parseApiResponse<AiResult>(response);
 }

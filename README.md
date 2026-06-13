@@ -5,9 +5,9 @@
 
 你把课件、教材、往年题、笔记、PDF、手写照片、视频字幕扔进来，剩下的交给 AI——拆知识点、讲重点、出题、批改、生成模拟考、临考速背卡片。自己带 API Key，数据全在浏览器里，目前不搞账号，以后再弄。
 
-> 🚀 **在线预览**：[kaobuddy-preview-production.up.railway.app](https://kaobuddy-preview-production.up.railway.app/)
-> 
-> 打开即用，不用装任何东西。手机电脑都能访问。
+> 之前的 Railway 在线预览因为免费额度用完了，现在不保证能打开。
+>
+> 想用的话建议自己在电脑上跑，或者把这个项目部署到自己的云平台账号里。下面有 Mac 和 Windows 的详细步骤。
 
 ---
 
@@ -133,47 +133,93 @@
 
 ## 怎么用
 
-### 已经部署好了（推荐）
+### 先说一下在线预览
 
-打开即用，啥都不用装：
+原来的 Railway 预览地址还留在这里，但免费额度用完时会打不开：
 
 > **[kaobuddy-preview-production.up.railway.app](https://kaobuddy-preview-production.up.railway.app/)**
 
-考搭子跑在 Railway 上，手机电脑都能访问。
+所以现在更推荐下面两种方式：
+- 自己电脑上跑：适合自己用，最省事。
+- 自己部署到云平台：适合手机、平板、别人也要访问。
 
-### 自己电脑上跑
+### Mac 本地部署
 
-**Mac**：双击 `open-kaobuddy.command`
+适合只是自己在电脑上用。第一次会慢一点，因为要装依赖和构建页面。
 
-**Windows**：双击 `open-kaobuddy.bat`
-
-脚本会自动装依赖、启动服务、打开 `http://127.0.0.1:8000`。
-
-### 手动启动
+1. 安装 Python 3：<https://www.python.org/downloads/>
+2. 安装 Node.js LTS：<https://nodejs.org/>
+3. 下载项目代码：
 
 ```bash
-# 后端
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[test]"
-uvicorn backend.app.main:app --port 8000
-
-# 前端开发
-npm install
-npm run dev          # 打开 http://localhost:5173，API 自动代理到 8000
+git clone https://github.com/jin-zi-xuan/kaobuddy-pwa.git
+cd kaobuddy-pwa
 ```
 
-### 自己部署
+不会用 git 的话，也可以在 GitHub 页面点 **Code → Download ZIP**，解压后进入文件夹。
+
+4. 双击 `open-kaobuddy.command`。
+5. 浏览器会打开 `http://127.0.0.1:8000`，看到页面就可以填自己的 API Key 了。
+
+如果 macOS 提示不让打开，可以在终端里执行一次：
+
+```bash
+chmod +x open-kaobuddy.command
+./open-kaobuddy.command
+```
+
+### Windows 本地部署
+
+1. 安装 Python 3：<https://www.python.org/downloads/>
+   - 安装时记得勾选 **Add python.exe to PATH**。
+2. 安装 Node.js LTS：<https://nodejs.org/>
+3. 下载项目代码：
+   - 会用 git：`git clone https://github.com/jin-zi-xuan/kaobuddy-pwa.git`
+   - 不会用 git：GitHub 页面点 **Code → Download ZIP**，解压。
+4. 进入项目文件夹，双击 `open-kaobuddy.bat`。
+5. 第一次会自动安装依赖，等浏览器打开 `http://127.0.0.1:8000` 就能用了。
+
+如果双击后窗口一闪而过，通常是 Python 或 Node.js 没装好。可以在项目文件夹空白处右键，选择“在终端中打开”，然后跑：
+
+```powershell
+py -3 --version
+node --version
+npm --version
+open-kaobuddy.bat
+```
+
+前三条都能显示版本号，脚本一般就能正常跑。
+
+### 开发者启动
+
+```bash
+npm install
+npm run dev
+```
+
+`npm run dev` 会同时启动 FastAPI 后端和 Vite 前端：
+- 后端：`http://127.0.0.1:8000`
+- 前端开发页：`http://localhost:5173`
+
+如果只想开前端：
+
+```bash
+npm run dev:frontend
+```
+
+注意：只开前端时，`8000` 后端必须另外启动，不然测试 API Key 会失败。
+
+### 自己部署到云平台
+
+如果想让手机、平板或者别人也能访问，就需要部署到自己的云平台账号里。项目已经带了 Dockerfile、Fly.io 配置和 Railway 启动配置。
 
 ```bash
 # Docker
 docker build -t kaobuddy .
 docker run -p 8080:8080 kaobuddy
-
-# Railway 
-# 项目里已经有 Dockerfile + fly.toml + Procfile
-# 详细步骤见 DEPLOY.md
 ```
+
+Railway 也能部署，但需要用你自己的 Railway 账号和额度。更完整的 Fly.io、Cloudflare Tunnel、Railway 步骤见 [DEPLOY.md](DEPLOY.md)。
 
 ---
 
@@ -252,7 +298,7 @@ python3 -m py_compile backend/app/*.py   # 语法检查
 npx tsc --noEmit                         # 类型检查
 
 # 前端单元测试
-node --import tsx --test tests/frontend/ # 36 个测试
+node --import tsx --test tests/frontend/*.test.ts # 36 个测试
 
 # 构建检查
 npx vite build                           # 确保能正常打包
