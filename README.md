@@ -7,7 +7,9 @@
 
 > 之前的 Railway 在线预览因为免费额度用完了，现在不保证能打开。
 >
-> 普通用户建议直接下载免安装便携包：解压后双击启动，不用自己装 Python 或 Node。
+> Windows 用户建议直接下载免安装便携包：解压后双击启动，不用自己装 Python 或 Node。
+>
+> macOS 免安装包暂时不推荐发布，因为未做 Apple 签名/公证会被系统拦截。Mac 用户先按下面的源码运行或云部署方式使用。
 
 ---
 
@@ -133,26 +135,22 @@
 
 ## 怎么用
 
-### 普通用户：下载免安装包
+### Windows 用户：下载免安装包
 
 1. 打开 GitHub Releases：
 
 > **[KaoBuddy Releases](https://github.com/jin-zi-xuan/kaobuddy-pwa/releases)**
 
-2. 按系统下载：
-   - Windows：`KaoBuddy-Windows.zip`
-   - Mac：`KaoBuddy-macOS.zip`
+2. 下载 `KaoBuddy-Windows.zip`。
 3. 解压 zip。
-4. 双击启动：
-   - Windows：`start-kaobuddy.bat`
-   - Mac：`start-kaobuddy.command`
+4. 双击 `start-kaobuddy.bat`。
 5. 浏览器会自动打开 `http://127.0.0.1:8000`。填自己的 AI API Key，就能开始用。
 
 便携包是本机运行。关闭启动窗口，KaoBuddy 也会停止。
 
-### 源码运行
+### Mac 用户：源码运行
 
-如果你是开发者，或者想自己从源码启动：
+macOS 现在先不提供免安装一键启动包。原因是没有 Apple Developer ID 签名和公证时，下载包会被 Gatekeeper 拦截。
 
 适合只是自己在电脑上用。第一次会慢一点，因为要装依赖和构建页面。
 
@@ -160,14 +158,20 @@
 
 **Mac**：双击 `open-kaobuddy.command`
 
-**Windows**：双击 `open-kaobuddy.bat`
-
 如果 macOS 提示不让打开，可以在终端里执行一次：
 
 ```bash
 chmod +x open-kaobuddy.command
 ./open-kaobuddy.command
 ```
+
+### 源码运行（Windows）
+
+如果你是开发者，或者想自己从源码启动，也可以不用 Release 便携包：
+
+**Windows**：双击 `open-kaobuddy.bat`
+
+源码启动需要本机已经装好 Python 3 和 Node.js LTS。脚本会自动装依赖、构建页面、启动服务，并打开 `http://127.0.0.1:8000`。
 
 如果双击后窗口一闪而过，通常是 Python 或 Node.js 没装好。可以在项目文件夹空白处右键，选择“在终端中打开”，然后跑：
 
