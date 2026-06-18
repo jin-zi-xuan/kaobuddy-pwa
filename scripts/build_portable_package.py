@@ -12,6 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUTS_DIR = ROOT / "outputs"
 PYINSTALLER_BUILD_DIR = ROOT / "build" / "pyinstaller"
 PYINSTALLER_DIST_DIR = ROOT / "dist" / "pyinstaller"
+REQUIRED_STATIC_FILES = [
+    Path("backend/static/index.html"),
+    Path("backend/static/manifest.webmanifest"),
+    Path("backend/static/sw.js"),
+    Path("backend/static/icons/icon.svg"),
+]
 
 
 TARGETS = {
@@ -37,7 +43,17 @@ def pyinstaller_data_arg(source: str, dest: str) -> str:
     return f"{source}{separator}{dest}"
 
 
+def validate_static_assets(root: Path = ROOT) -> None:
+    missing = [path for path in REQUIRED_STATIC_FILES if not (root / path).is_file()]
+    if missing:
+        missing_list = ", ".join(path.as_posix() for path in missing)
+        raise FileNotFoundError(f"便携包缺少前端静态文件：{missing_list}。请先运行 npm run build。")
+
+
 def build_executable() -> Path:
+    validate_static_assets()
+    static_dir = ROOT / "backend" / "static"
+    public_dir = ROOT / "public"
     run([
         sys.executable,
         "-m",
@@ -54,9 +70,9 @@ def build_executable() -> Path:
         "--collect-submodules",
         "uvicorn",
         "--add-data",
-        pyinstaller_data_arg("backend/static", "backend/static"),
+        pyinstaller_data_arg(str(static_dir), "backend/static"),
         "--add-data",
-        pyinstaller_data_arg("public", "public"),
+        pyinstaller_data_arg(str(public_dir), "public"),
         "scripts/kaobuddy_launcher.py",
     ])
     executable = PYINSTALLER_DIST_DIR / ("kaobuddy.exe" if os.name == "nt" else "kaobuddy")

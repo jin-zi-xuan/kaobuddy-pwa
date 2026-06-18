@@ -1,6 +1,6 @@
 [project]
 name = "kaobuddy-pwa"
-version = "1.0.0"
+version = "1.2.2"
 description = "考搭子 KaoBuddy，手机可用的免费备考 PWA，FastAPI 后端 + React PWA 前端。"
 requires-python = ">=3.9"
 dependencies = [

@@ -16,8 +16,18 @@ def bundle_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def configure_portable_environment(root_dir: Path) -> None:
+def portable_data_root(root_dir: Path) -> Path:
     root = Path(root_dir).resolve()
+    if (root / "backend" / "static" / "index.html").exists():
+        return root
+    internal = root / "_internal"
+    if (internal / "backend" / "static" / "index.html").exists():
+        return internal
+    return root
+
+
+def configure_portable_environment(root_dir: Path) -> None:
+    root = portable_data_root(root_dir)
     os.environ.setdefault("KAOBUDDY_ROOT_DIR", str(root))
     os.environ.setdefault("KAOBUDDY_STATIC_DIR", str(root / "backend" / "static"))
     os.environ.setdefault("KAOBUDDY_DIST_DIR", str(root / "dist"))

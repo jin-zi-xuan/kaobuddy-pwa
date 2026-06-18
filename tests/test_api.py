@@ -1,4 +1,5 @@
 import os
+import importlib.util
 from pathlib import Path
 
 import httpx
@@ -10,6 +11,15 @@ from backend.app.main import app
 from backend.app.portable_launcher import configure_portable_environment
 from backend.app.runtime_paths import resolve_runtime_paths
 from backend.app.schemas import ApiConfig, ChatMessage
+
+
+_portable_package_spec = importlib.util.spec_from_file_location(
+    "build_portable_package",
+    Path(__file__).resolve().parents[1] / "scripts" / "build_portable_package.py",
+)
+assert _portable_package_spec and _portable_package_spec.loader
+build_portable_package = importlib.util.module_from_spec(_portable_package_spec)
+_portable_package_spec.loader.exec_module(build_portable_package)
 
 
 client = TestClient(app)
@@ -83,6 +93,31 @@ def test_portable_launcher_sets_bundle_paths_without_overwriting_existing_values
     assert os.environ["KAOBUDDY_STATIC_DIR"] == str(custom_static)
     assert os.environ["KAOBUDDY_DIST_DIR"] == str(root / "dist")
     assert os.environ["KAOBUDDY_PUBLIC_DIR"] == str(root / "public")
+
+
+def test_portable_launcher_uses_pyinstaller_internal_data_root(tmp_path, monkeypatch):
+    root = tmp_path / "bundle"
+    internal = root / "_internal"
+    (internal / "backend" / "static").mkdir(parents=True)
+    (internal / "backend" / "static" / "index.html").write_text("<div>KaoBuddy</div>", encoding="utf-8")
+    (internal / "public").mkdir()
+
+    for key in ("KAOBUDDY_ROOT_DIR", "KAOBUDDY_STATIC_DIR", "KAOBUDDY_DIST_DIR", "KAOBUDDY_PUBLIC_DIR"):
+        monkeypatch.delenv(key, raising=False)
+
+    configure_portable_environment(root)
+
+    assert os.environ["KAOBUDDY_ROOT_DIR"] == str(internal)
+    assert os.environ["KAOBUDDY_STATIC_DIR"] == str(internal / "backend" / "static")
+    assert os.environ["KAOBUDDY_PUBLIC_DIR"] == str(internal / "public")
+
+
+def test_portable_package_requires_static_index_before_pyinstaller(tmp_path):
+    root = tmp_path / "repo"
+    (root / "backend" / "static").mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError, match="backend/static/index.html"):
+        build_portable_package.validate_static_assets(root)
 
 
 def test_api_config_requires_http_base_url():

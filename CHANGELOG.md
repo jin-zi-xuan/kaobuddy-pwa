@@ -1,5 +1,15 @@
 # 更新记录
 
+## v1.2.2 - 2026-06-18
+
+这是一个 Windows 免安装包补丁版，专门修复用户打开本地端口时首页 500 的问题。
+
+### 修复
+
+- 修复 PyInstaller 便携包在部分环境下找不到 `backend/static/index.html`，导致 `/health` 正常但首页显示 `Internal Server Error` 的问题。
+- 启动器现在会兼容 PyInstaller 的 `_internal` 运行目录布局，能从正确位置找到前端静态文件。
+- 打包脚本在生成 exe 前会检查首页、manifest、service worker 和图标是否存在，避免再发布缺静态文件的包。
+
 ## v1.2.1 - 2026-06-15
 
 这是一个补丁版，主要修复多项目并行备考时的计划草稿串用问题。
