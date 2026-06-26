@@ -14,6 +14,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "motion": "^12.40.0",
     "pdfjs-dist": "^4.10.38",

@@ -72,6 +72,60 @@ export async function readDocumentText(file: File): Promise<string> {
   throw new Error("这个文档格式暂时不能解析，请换成 DOCX、PDF、TXT 或 Markdown。");
 }
 
+function decodeXmlText(text: string) {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_match, value) => String.fromCodePoint(Number(value)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, value) => String.fromCodePoint(parseInt(value, 16)));
+}
+
+function slideNumberFromPath(path: string) {
+  const match = path.match(/slide(\d+)\.xml$/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function extractSlideText(xml: string) {
+  return Array.from(xml.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g))
+    .map((match) => decodeXmlText(match[1]).replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+export async function readPresentationText(file: File): Promise<string> {
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith(".ppt")) {
+    throw new Error("老版 PPT 暂时不能稳定解析，请另存为 PPTX 或 PDF 后再导入。");
+  }
+  if (!lower.endsWith(".pptx")) {
+    throw new Error("这个演示文稿格式暂时不能解析，请换成 PPTX 或 PDF。");
+  }
+
+  const { default: JSZip } = await import("jszip");
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const slideFiles = zip
+    .file(/^ppt\/slides\/slide\d+\.xml$/)
+    .sort((a, b) => slideNumberFromPath(a.name) - slideNumberFromPath(b.name));
+  if (!slideFiles.length) {
+    throw new Error("这个 PPTX 没找到可读取的幻灯片，请另存为 PDF 后再导入。");
+  }
+
+  const pages = await Promise.all(
+    slideFiles.map(async (slide, index) => {
+      const text = extractSlideText(await slide.async("text"));
+      return `第 ${index + 1} 页\n${text}`;
+    })
+  );
+  const content = pages.join("\n\n").trim();
+  if (!content.replace(/第 \d+ 页/g, "").trim()) {
+    throw new Error("这个 PPTX 没提取到正文，可能主要是图片或扫描页，可以另存为 PDF 后导入。");
+  }
+  return `PPT 正文\n${content}`;
+}
+
 export async function readPdfForAi(file: File): Promise<{ text: string; pageImages: string[]; pageCount: number }> {
   const pdfjsLib = await _getPdfLib();
   const data = await file.arrayBuffer();
