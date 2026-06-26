@@ -68,6 +68,27 @@ def completion_timeout_seconds(api_config: ApiConfig, *, stream: bool = False) -
     return min(max_timeout, max(base_timeout, scaled_timeout))
 
 
+def _should_disable_deepseek_thinking(api_config: ApiConfig) -> bool:
+    provider = api_config.provider_name.lower()
+    base_url = api_config.base_url.lower()
+    model = api_config.model.lower()
+    return model.startswith("deepseek-v4") and ("deepseek" in provider or "api.deepseek.com" in base_url)
+
+
+def _chat_completion_payload(api_config: ApiConfig, messages: List[ChatMessage], *, stream: bool = False) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "model": api_config.model,
+        "messages": [message.model_dump() for message in messages],
+        "temperature": api_config.temperature,
+        "max_tokens": api_config.max_tokens,
+    }
+    if stream:
+        payload["stream"] = True
+    if _should_disable_deepseek_thinking(api_config):
+        payload["thinking"] = {"type": "disabled"}
+    return payload
+
+
 async def chat_completion(api_config: ApiConfig, messages: List[ChatMessage]) -> str:
     content, _usage = await chat_completion_with_usage(api_config, messages)
     return content
@@ -75,12 +96,7 @@ async def chat_completion(api_config: ApiConfig, messages: List[ChatMessage]) ->
 
 async def chat_completion_with_usage(api_config: ApiConfig, messages: List[ChatMessage]) -> Tuple[str, Dict[str, Any]]:
     endpoint = f"{api_config.base_url}/chat/completions"
-    payload: Dict[str, Any] = {
-        "model": api_config.model,
-        "messages": [message.model_dump() for message in messages],
-        "temperature": api_config.temperature,
-        "max_tokens": api_config.max_tokens,
-    }
+    payload = _chat_completion_payload(api_config, messages)
     headers = {
         "Authorization": f"Bearer {api_config.api_key}",
         "Content-Type": "application/json",
@@ -115,13 +131,7 @@ async def chat_completion_stream(api_config: ApiConfig, messages: List[ChatMessa
     from typing import AsyncGenerator
 
     endpoint = f"{api_config.base_url}/chat/completions"
-    payload: Dict[str, Any] = {
-        "model": api_config.model,
-        "messages": [message.model_dump() for message in messages],
-        "temperature": api_config.temperature,
-        "max_tokens": api_config.max_tokens,
-        "stream": True,
-    }
+    payload = _chat_completion_payload(api_config, messages, stream=True)
     headers = {
         "Authorization": f"Bearer {api_config.api_key}",
         "Content-Type": "application/json",
