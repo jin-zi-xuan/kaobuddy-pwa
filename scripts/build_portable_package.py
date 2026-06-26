@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,7 @@ REQUIRED_STATIC_FILES = [
     Path("backend/static/sw.js"),
     Path("backend/static/icons/icon.svg"),
 ]
+INDEX_ASSET_RE = re.compile(r"""(?:src|href)=["'](/assets/[^"']+)["']""")
 
 
 TARGETS = {
@@ -44,7 +46,17 @@ def pyinstaller_data_arg(source: str, dest: str) -> str:
 
 
 def validate_static_assets(root: Path = ROOT) -> None:
+    index_path = root / "backend/static/index.html"
     missing = [path for path in REQUIRED_STATIC_FILES if not (root / path).is_file()]
+    if index_path.is_file():
+        html = index_path.read_text(encoding="utf-8")
+        referenced_assets = sorted({Path(match.lstrip("/")) for match in INDEX_ASSET_RE.findall(html)})
+        missing.extend(path for path in referenced_assets if not (root / "backend/static" / path).is_file())
+
+    pdf_workers = list((root / "backend/static/assets").glob("pdf.worker-*.mjs"))
+    if not pdf_workers:
+        missing.append(Path("backend/static/assets/pdf.worker-*.mjs"))
+
     if missing:
         missing_list = ", ".join(path.as_posix() for path in missing)
         raise FileNotFoundError(f"便携包缺少前端静态文件：{missing_list}。请先运行 npm run build。")
