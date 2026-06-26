@@ -818,6 +818,29 @@ def test_daily_plan_rejects_empty_modules(monkeypatch):
     assert response.status_code == 200
 
 
+def test_deepseek_handwriting_ocr_returns_multimodal_message(monkeypatch):
+    async def fake_chat_completion(api_config, messages):
+        raise AssertionError("DeepSeek image OCR should be rejected before calling AI")
+
+    monkeypatch.setattr("backend.app.main.chat_completion", fake_chat_completion)
+    response = client.post(
+        "/api/ocr/handwriting",
+        json={
+            "api_config": {
+                "provider_name": "DeepSeek",
+                "base_url": "https://api.deepseek.com",
+                "api_key": TEST_API_KEY,
+                "model": "deepseek-v4-pro",
+            },
+            "image_data_urls": ["data:image/png;base64,VEVTVA=="],
+            "note_hint": "第三章笔记",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "DeepSeek 没有多模态，暂时不支持解析图片。"
+
+
 # ---- Logging related: health check still works ----
 
 

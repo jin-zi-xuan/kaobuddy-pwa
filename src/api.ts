@@ -10,6 +10,8 @@ export type AiResult = {
   remainingBudgetCny?: number;
 };
 
+export const DEEPSEEK_IMAGE_UNSUPPORTED_MESSAGE = "DeepSeek 没有多模态，暂时不支持解析图片。";
+
 type AiPayload = AiAuthPayload & {
   project: Omit<StudyProject, "id" | "created_at" | "updated_at">;
   materials: Pick<StudyMaterial, "id" | "title" | "kind" | "content">[];
@@ -17,6 +19,19 @@ type AiPayload = AiAuthPayload & {
 };
 
 const LOCAL_BACKEND_OFFLINE_MESSAGE = "请求没有到达 KaoBuddy 后端，本地后端可能没有启动。请用 npm run dev 启动完整开发环境，或者双击 open-kaobuddy.command / open-kaobuddy.bat。";
+
+export function isDeepSeekApiConfig(api_config: ApiConfig): boolean {
+  const provider = api_config.provider_name.toLowerCase();
+  const baseUrl = api_config.base_url.toLowerCase();
+  const model = api_config.model.toLowerCase();
+  return provider.includes("deepseek") || baseUrl.includes("api.deepseek.com") || model.includes("deepseek");
+}
+
+export function assertImageRecognitionSupported(auth: AiAuthPayload): void {
+  if ("api_config" in auth && auth.api_config && isDeepSeekApiConfig(auth.api_config)) {
+    throw new Error(DEEPSEEK_IMAGE_UNSUPPORTED_MESSAGE);
+  }
+}
 
 export async function parseApiResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null);
@@ -216,6 +231,7 @@ export async function importVideo(url: string) {
 }
 
 export async function recognizeHandwriting(auth: AiAuthPayload, image_data_urls: string[], note_hint?: string): Promise<AiResult> {
+  assertImageRecognitionSupported(auth);
   const response = await fetch(`${API_BASE}/api/ocr/handwriting`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

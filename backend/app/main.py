@@ -172,6 +172,7 @@ ASSETS_DIR = DIST_DIR / "assets" if (DIST_DIR / "assets").exists() else STATIC_D
 ICONS_DIR = DIST_DIR / "icons" if (DIST_DIR / "icons").exists() else STATIC_DIR / "icons"
 PLAN_CHUNK_SIZE = 8000
 PLAN_MIN_TOKENS = 8000
+DEEPSEEK_IMAGE_UNSUPPORTED_MESSAGE = "DeepSeek 没有多模态，暂时不支持解析图片。"
 
 
 class FallbackStaticFiles(StaticFiles):
@@ -271,6 +272,13 @@ def _response_from_invite(content: str, invite_code: str, usage: dict[str, Any],
     return AiResponse(content=content, remaining=status.remaining, remaining_budget_cny=status.remaining_budget_cny)
 
 
+def _is_deepseek_api_config(api_config: Any) -> bool:
+    provider = getattr(api_config, "provider_name", "").lower()
+    base_url = getattr(api_config, "base_url", "").lower()
+    model = getattr(api_config, "model", "").lower()
+    return "deepseek" in provider or "api.deepseek.com" in base_url or "deepseek" in model
+
+
 def _resolve_auth(
     request: AiRequest | ChatCompletionRequest | DailyPlanRequest | HandwritingRequest,
     prompt_chars: int,
@@ -318,9 +326,16 @@ def _resolve_auth(
     return api_config, invite_code
 
 
-async def _chat_for_request(request: AiRequest | ChatCompletionRequest | DailyPlanRequest | HandwritingRequest, messages: list[ChatMessage], minimum_tokens: int | None = None) -> AiResponse:
+async def _chat_for_request(
+    request: AiRequest | ChatCompletionRequest | DailyPlanRequest | HandwritingRequest,
+    messages: list[ChatMessage],
+    minimum_tokens: int | None = None,
+    requires_vision: bool = False,
+) -> AiResponse:
     prompt_chars = _messages_char_count(messages)
     api_config, invite_code = _resolve_auth(request, prompt_chars, minimum_tokens)
+    if requires_vision and _is_deepseek_api_config(api_config):
+        raise HTTPException(status_code=400, detail=DEEPSEEK_IMAGE_UNSUPPORTED_MESSAGE)
 
     if not invite_code:
         with log_timing(log, "ai call",
@@ -720,7 +735,7 @@ async def handwriting_ocr(request: HandwritingRequest) -> AiResponse:
         ChatMessage(role="system", content=OCR_SYSTEM_PROMPT),
         ChatMessage(role="user", content=content),
     ]
-    return await _chat_for_request(request, messages)
+    return await _chat_for_request(request, messages, requires_vision=True)
 
 
 @app.post("/api/video/import", response_model=VideoImportResponse)
