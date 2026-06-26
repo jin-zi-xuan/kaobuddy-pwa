@@ -4,10 +4,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.ai_client import chat_completion_with_usage, completion_timeout_seconds
-from backend.app.main import app
+from backend.app.main import FallbackStaticFiles, app
 from backend.app.portable_launcher import configure_portable_environment
 from backend.app.runtime_paths import resolve_runtime_paths
 from backend.app.schemas import ApiConfig, ChatMessage
@@ -120,6 +121,68 @@ def test_portable_package_requires_static_index_before_pyinstaller(tmp_path):
         build_portable_package.validate_static_assets(root)
 
 
+def test_portable_package_requires_index_referenced_assets(tmp_path):
+    root = tmp_path / "repo"
+    static = root / "backend" / "static"
+    static.mkdir(parents=True)
+    (static / "index.html").write_text(
+        '<script type="module" src="/assets/index-demo.js"></script>\n'
+        '<link rel="stylesheet" href="/assets/index-demo.css">',
+        encoding="utf-8",
+    )
+    (static / "manifest.webmanifest").write_text("{}", encoding="utf-8")
+    (static / "sw.js").write_text("// sw", encoding="utf-8")
+    (static / "icons").mkdir()
+    (static / "icons" / "icon.svg").write_text("<svg></svg>", encoding="utf-8")
+    (static / "assets").mkdir()
+
+    with pytest.raises(FileNotFoundError, match="assets/index-demo.js"):
+        build_portable_package.validate_static_assets(root)
+
+
+def test_portable_package_requires_pdf_worker_asset(tmp_path):
+    root = tmp_path / "repo"
+    static = root / "backend" / "static"
+    assets = static / "assets"
+    assets.mkdir(parents=True)
+    (static / "index.html").write_text(
+        '<script type="module" src="/assets/index-demo.js"></script>\n'
+        '<link rel="stylesheet" href="/assets/index-demo.css">',
+        encoding="utf-8",
+    )
+    (static / "manifest.webmanifest").write_text("{}", encoding="utf-8")
+    (static / "sw.js").write_text("// sw", encoding="utf-8")
+    (static / "icons").mkdir()
+    (static / "icons" / "icon.svg").write_text("<svg></svg>", encoding="utf-8")
+    (assets / "index-demo.js").write_text("console.log('ok')", encoding="utf-8")
+    (assets / "index-demo.css").write_text("body {}", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="pdf.worker"):
+        build_portable_package.validate_static_assets(root)
+
+
+def test_assets_route_falls_back_when_preferred_directory_is_incomplete(tmp_path):
+    preferred = tmp_path / "dist" / "assets"
+    fallback = tmp_path / "backend" / "static" / "assets"
+    preferred.mkdir(parents=True)
+    fallback.mkdir(parents=True)
+    (preferred / "index-demo.js").write_text("console.log('preferred')", encoding="utf-8")
+    (fallback / "pdf.worker-demo.mjs").write_text("export default 'worker';", encoding="utf-8")
+
+    test_app = FastAPI()
+    test_app.mount("/assets", FallbackStaticFiles([preferred, fallback]), name="assets")
+    test_client = TestClient(test_app)
+
+    preferred_response = test_client.get("/assets/index-demo.js")
+    fallback_response = test_client.get("/assets/pdf.worker-demo.mjs")
+
+    assert preferred_response.status_code == 200
+    assert "preferred" in preferred_response.text
+    assert fallback_response.status_code == 200
+    assert fallback_response.headers["content-type"].startswith("text/javascript")
+    assert "worker" in fallback_response.text
+
+
 def test_api_config_requires_http_base_url():
     with pytest.raises(ValueError):
         ApiConfig(
@@ -174,6 +237,55 @@ async def test_ai_timeout_error_explains_generation_may_still_be_valid(monkeypat
 
     assert "AI 生成超时" in str(exc_info.value)
     assert "测试连接成功" in str(exc_info.value)
+
+
+async def test_deepseek_v4_disables_thinking_for_chat_completions(monkeypatch):
+    captured_payloads = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, endpoint, json, headers):
+            captured_payloads.append(json)
+            return httpx.Response(
+                200,
+                request=httpx.Request("POST", endpoint),
+                json={
+                    "choices": [{"message": {"content": "计划内容"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 4},
+                },
+            )
+
+    monkeypatch.setattr("backend.app.ai_client.httpx.AsyncClient", FakeAsyncClient)
+    deepseek_config = ApiConfig(
+        provider_name="DeepSeek",
+        base_url="https://api.deepseek.com",
+        api_key=TEST_API_KEY,
+        model="deepseek-v4-pro",
+        max_tokens=8000,
+    )
+    openai_config = ApiConfig(
+        provider_name="OpenAI",
+        base_url="https://api.openai.com/v1",
+        api_key=TEST_API_KEY,
+        model="gpt-5.5",
+        max_tokens=8000,
+    )
+
+    deepseek_content, _ = await chat_completion_with_usage(deepseek_config, [ChatMessage(role="user", content="生成计划")])
+    openai_content, _ = await chat_completion_with_usage(openai_config, [ChatMessage(role="user", content="生成计划")])
+
+    assert deepseek_content == "计划内容"
+    assert openai_content == "计划内容"
+    assert captured_payloads[0]["thinking"] == {"type": "disabled"}
+    assert "thinking" not in captured_payloads[1]
 
 
 def test_plan_allows_empty_weak_points(monkeypatch):

@@ -1,7 +1,7 @@
 // kaobuddy service worker
 // Strategy: network-first for everything, cache for offline fallback
-// 1782451630473 is replaced by vite at build time so every deploy busts the cache (both comment and CACHE_VERSION).
-const CACHE_VERSION = "kaobuddy-1782451630473";
+// 1782451984298 is replaced by vite at build time so every deploy busts the cache (both comment and CACHE_VERSION).
+const CACHE_VERSION = "kaobuddy-1782451984298";
 const SHELL = ["/", "/manifest.webmanifest", "/icons/icon.svg"];
 
 // Listen for skip-waiting message from the page

@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ai_client import (
@@ -172,8 +173,35 @@ ICONS_DIR = DIST_DIR / "icons" if (DIST_DIR / "icons").exists() else STATIC_DIR 
 PLAN_CHUNK_SIZE = 8000
 PLAN_MIN_TOKENS = 8000
 DEEPSEEK_IMAGE_UNSUPPORTED_MESSAGE = "DeepSeek 没有多模态，暂时不支持解析图片。"
-if ASSETS_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+
+class FallbackStaticFiles(StaticFiles):
+    def __init__(self, directories: list[Path]):
+        existing = [Path(directory) for directory in directories if Path(directory).exists()]
+        if not existing:
+            raise RuntimeError("FallbackStaticFiles needs at least one existing directory")
+        super().__init__(directory=str(existing[0]))
+        self._fallback_apps = [StaticFiles(directory=str(directory)) for directory in existing[1:]]
+
+    async def get_response(self, path: str, scope: Any) -> Response:
+        last_not_found: StarletteHTTPException | None = None
+        for app in [self, *self._fallback_apps]:
+            try:
+                if app is self:
+                    return await StaticFiles.get_response(self, path, scope)
+                return await app.get_response(path, scope)
+            except StarletteHTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                last_not_found = exc
+        if last_not_found:
+            raise last_not_found
+        raise StarletteHTTPException(status_code=404)
+
+
+ASSET_DIRS = [DIST_DIR / "assets", STATIC_DIR / "assets"]
+if any(directory.exists() for directory in ASSET_DIRS):
+    app.mount("/assets", FallbackStaticFiles(ASSET_DIRS), name="assets")
 if ICONS_DIR.exists():
     app.mount("/icons", StaticFiles(directory=ICONS_DIR), name="icons")
 
