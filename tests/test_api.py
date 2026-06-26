@@ -176,6 +176,55 @@ async def test_ai_timeout_error_explains_generation_may_still_be_valid(monkeypat
     assert "测试连接成功" in str(exc_info.value)
 
 
+async def test_deepseek_v4_disables_thinking_for_chat_completions(monkeypatch):
+    captured_payloads = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, endpoint, json, headers):
+            captured_payloads.append(json)
+            return httpx.Response(
+                200,
+                request=httpx.Request("POST", endpoint),
+                json={
+                    "choices": [{"message": {"content": "计划内容"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 4},
+                },
+            )
+
+    monkeypatch.setattr("backend.app.ai_client.httpx.AsyncClient", FakeAsyncClient)
+    deepseek_config = ApiConfig(
+        provider_name="DeepSeek",
+        base_url="https://api.deepseek.com",
+        api_key=TEST_API_KEY,
+        model="deepseek-v4-pro",
+        max_tokens=8000,
+    )
+    openai_config = ApiConfig(
+        provider_name="OpenAI",
+        base_url="https://api.openai.com/v1",
+        api_key=TEST_API_KEY,
+        model="gpt-5.5",
+        max_tokens=8000,
+    )
+
+    deepseek_content, _ = await chat_completion_with_usage(deepseek_config, [ChatMessage(role="user", content="生成计划")])
+    openai_content, _ = await chat_completion_with_usage(openai_config, [ChatMessage(role="user", content="生成计划")])
+
+    assert deepseek_content == "计划内容"
+    assert openai_content == "计划内容"
+    assert captured_payloads[0]["thinking"] == {"type": "disabled"}
+    assert "thinking" not in captured_payloads[1]
+
+
 def test_plan_allows_empty_weak_points(monkeypatch):
     async def fake_chat_completion(api_config, messages):
         assert "已知薄弱项：未填写" in messages[1].content
