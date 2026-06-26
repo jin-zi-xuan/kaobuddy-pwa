@@ -6,7 +6,7 @@ import {
   Lightning, ListChecks, Notebook, PencilSimple, PlusCircle, ShieldCheck,
   Sparkle, StackPlus, Target, Ticket, Timer, Trash, UploadSimple, Video
 } from "@phosphor-icons/react";
-import { gradeMock, gradePractice, importVideo, recognizeHandwriting, runAi, runCardsStream, runDailyPlan, runMemorize, runModulePractice, testApiConfig, verifyInviteCode, type AiAuthPayload, type AiResult } from "./api";
+import { assertImageRecognitionSupported, gradeMock, gradePractice, importVideo, recognizeHandwriting, runAi, runCardsStream, runDailyPlan, runMemorize, runModulePractice, testApiConfig, verifyInviteCode, type AiAuthPayload, type AiResult } from "./api";
 import { BrandMark, RenderHumanText, StatusToast } from "./components/Common";
 import { readAsDataUrl, readDocumentText, readPdfText, readTextFile } from "./fileReaders";
 import { getGenerationGuard } from "./generationGuards";
@@ -549,9 +549,11 @@ export default function App() {
       const selected = Array.from(files).slice(0, 6);
       const pdfFiles = selected.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
       const imageFiles = selected.filter((file) => !file.name.toLowerCase().endsWith(".pdf"));
+      const authPayload = getAuthPayload();
+      if (imageFiles.length) assertImageRecognitionSupported(authPayload);
       const pdfText = (await Promise.all(pdfFiles.map(readPdfText))).join("\n\n");
       const imageDataUrls = await Promise.all(imageFiles.map(readAsDataUrl));
-      const recognized = imageDataUrls.length ? await recognizeHandwriting(getAuthPayload(), imageDataUrls, handwritingHint) : null;
+      const recognized = imageDataUrls.length ? await recognizeHandwriting(authPayload, imageDataUrls, handwritingHint) : null;
       await storage.saveMaterial({
         id: createId("material"),
         project_id: activeProject!.id,
