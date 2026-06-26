@@ -67,6 +67,20 @@ test("parseModulesFromPlan handles text-format modules", () => {
   assert.equal(result[0]?.estimated_minutes, 45);
 });
 
+test("parseModulesFromPlan keeps large text-format module lists", () => {
+  let id = 0;
+  const names = ["进程", "线程", "死锁", "分页", "分段", "页面置换", "文件目录", "磁盘调度", "虚拟存储", "银行家算法"];
+  const content = Array.from({ length: 700 }, (_, index) => {
+    const name = `${names[index % names.length]}${Math.floor(index / names.length) + 1}`;
+    return `模块名称：${name}；预计时间：45分钟；难度：中；重要排名：${index + 1}；资料来源：课件；证据：第${index + 1}页`;
+  }).join("\n");
+
+  const result = parseModulesFromPlan(content, project.id, "note-1", 0, () => `module-${++id}`);
+
+  assert.equal(result.length, 700);
+  assert.equal(result.at(-1)?.title, "银行家算法70");
+});
+
 test("parseModulesFromPlan merges duplicate example-titled modules", () => {
   const result = parseModulesFromPlan(
     JSON.stringify([

@@ -534,6 +534,8 @@ export function toProjectPayload(project: StudyProject) {
 // Parse AI plan output → StudyTask[]
 // ---------------------------------------------------------------------------
 
+const MAX_TEXT_PLAN_MODULE_LINES = 2000;
+
 export type DailyPlanItem = {
   module_id: string;
   date: string;
@@ -791,8 +793,8 @@ export function parseModulesFromPlan(content: string, projectId: string, noteId:
     .filter((line) => line.length >= 2);
   const candidateLines = rawLines
     .filter((line) => /模块名称|知识点名称|模块名|知识点|考点|主题|预计|分钟|小时/.test(line))
-    .slice(0, 80);
-  const lines = candidateLines.length ? candidateLines : rawLines.slice(0, 80);
+    .slice(0, MAX_TEXT_PLAN_MODULE_LINES);
+  const lines = candidateLines.length ? candidateLines : rawLines.slice(0, MAX_TEXT_PLAN_MODULE_LINES);
   const modules = lines.flatMap((line, index) => {
     const title = extractModuleTitle(line);
     if (!title || isGenericModuleTitle(title) || isGenericModuleText(line)) return [];

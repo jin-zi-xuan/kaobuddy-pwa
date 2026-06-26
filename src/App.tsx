@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { assertImageRecognitionSupported, gradeMock, gradePractice, importVideo, recognizeHandwriting, runAi, runCardsStream, runDailyPlan, runMemorize, runModulePractice, testApiConfig, verifyInviteCode, type AiAuthPayload, type AiResult } from "./api";
 import { BrandMark, RenderHumanText, StatusToast } from "./components/Common";
-import { readAsDataUrl, readDocumentText, readPdfText, readTextFile } from "./fileReaders";
+import { readAsDataUrl, readDocumentText, readPdfText, readPresentationText, readTextFile } from "./fileReaders";
 import { getGenerationGuard } from "./generationGuards";
 import { applyInviteVerification, isInviteReady, updateInviteCodeDraft } from "./inviteState";
 import { exportMockExamPdf } from "./pdfExport";
@@ -493,11 +493,12 @@ export default function App() {
         try {
           const lower = file.name.toLowerCase();
           const isDocument = lower.endsWith(".doc") || lower.endsWith(".docx") || lower.endsWith(".odt") || lower.endsWith(".rtf");
+          const isPresentation = lower.endsWith(".ppt") || lower.endsWith(".pptx");
           const kind: MaterialKind = lower.endsWith(".pdf")
             ? "pdf"
             : lower.endsWith(".md") || lower.endsWith(".markdown")
               ? "markdown"
-              : isDocument
+              : isDocument || isPresentation
                 ? "document"
                 : "file";
           let content = "";
@@ -508,7 +509,10 @@ export default function App() {
             content = `PDF 文字层\n${text || "没有提取到文字层。扫描版 PDF 可以后续补充手动重点。"}`;
             warnings.push("已快速导入 PDF 文字层；扫描图片、图表和公式识别会放到后续单独处理。");
           } else {
-            if (kind === "document") {
+            if (isPresentation) {
+              updateUploadItem(queueId, { state: "reading", message: "正在读取 PPTX 文字层" });
+              content = await readPresentationText(file);
+            } else if (kind === "document") {
               updateUploadItem(queueId, { state: "reading", message: "正在读取文档正文" });
               content = await readDocumentText(file);
             } else {
@@ -526,7 +530,7 @@ export default function App() {
             created_at: nowIso()
           });
           successCount += 1;
-          updateUploadItem(queueId, { state: "done", message: kind === "pdf" ? "已快速导入 PDF 文字层" : kind === "document" ? "已导入文档正文" : "已导入资料库" });
+          updateUploadItem(queueId, { state: "done", message: kind === "pdf" ? "已快速导入 PDF 文字层" : isPresentation ? "已导入 PPTX 文字层" : kind === "document" ? "已导入文档正文" : "已导入资料库" });
         } catch (error) {
           updateUploadItem(queueId, { state: "failed", message: error instanceof Error ? error.message : "导入失败" });
         }
@@ -1582,7 +1586,7 @@ export default function App() {
                   <p>先快速收进资料库，扫描页和复杂图表后面再慢慢补。</p>
                 </div>
               </div>
-              <label className="file primary-upload"><UploadSimple size={20} weight="bold" />批量上传课件 / 教材 / 往年题（PDF / DOC / DOCX）<input type="file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.md,.markdown,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple onChange={(event) => handleFiles(event.target.files)} /></label>
+              <label className="file primary-upload"><UploadSimple size={20} weight="bold" />批量上传课件 / 教材 / 往年题（PDF / PPTX / DOC / DOCX）<input type="file" accept=".pdf,.ppt,.pptx,.doc,.docx,.odt,.rtf,.txt,.md,.markdown,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple onChange={(event) => handleFiles(event.target.files)} /></label>
               <p className="hint">默认会快速读取 PDF 文字层，先把资料放进库里。扫描页、图表和公式这类慢识别，后面单独处理，避免上传时卡太久。</p>
               {!!uploadQueue.length && (
                 <div className="upload-queue">
