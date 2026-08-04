@@ -39,7 +39,16 @@ def _set_test_invite_codes(monkeypatch, *suffixes: str) -> None:
 
 def test_no_legacy_demo_invite_codes_checked_in():
     legacy_prefix = "-".join(("KAO", "V1", "DEMO"))
-    ignored_dirs = {".git", ".pytest_cache", ".venv", "node_modules", "backend/static/assets", "dist", "work"}
+    ignored_dirs = {
+        ".git",
+        ".pytest_cache",
+        ".venv",
+        "node_modules",
+        "backend/static/assets",
+        "dist",
+        "target",
+        "work",
+    }
     offenders: list[str] = []
 
     for path in Path(".").rglob("*"):

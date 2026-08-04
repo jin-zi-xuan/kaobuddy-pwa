@@ -7,53 +7,50 @@ on:
     branches: [main]
 
 jobs:
-  backend:
-    name: "Python (${{ matrix.python-version }})"
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11"]
-
+  windows-desktop:
+    name: Windows desktop
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: ${{ matrix.python-version }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test desktop
+        run: cargo test -p kaobuddy
+      - name: Clippy desktop
+        run: cargo clippy -p kaobuddy -- -D warnings
+      - name: Build desktop executable
+        run: cargo build -p kaobuddy --release --features bundle
 
-      - name: Install Python dependencies
-        run: pip install -e ".[test]"
-
-      - name: Python syntax check
-        run: python -m py_compile backend/app/*.py
-
-      - name: Run pytest
-        run: pytest -q
-
-  frontend:
-    name: "Node (${{ matrix.node-version }})"
+  rust-api-compatibility:
+    name: Rust API compatibility
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: ["22"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: ${{ matrix.node-version }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p kaobuddy --no-default-features --features server
+      - run: cargo clippy -p kaobuddy --no-default-features --features server -- -D warnings
+
+  legacy-compatibility:
+    name: Legacy compatibility tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
           cache: npm
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: Vite build
-        run: npx vite build
+      - run: pip install -e ".[test]"
+      - run: npm ci
+      - run: pytest -q
+      - run: npx tsc --noEmit
+      - run: node --import tsx --test tests/frontend/*.test.ts

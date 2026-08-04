@@ -1,0 +1,42 @@
+[application]
+name = "KaoBuddy"
+default_platform = "desktop"
+out_dir = "desktop-dist"
+asset_dir = "assets"
+
+[web.app]
+title = "KaoBuddy 考研搭子"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src", "assets"]
+
+[web.resource]
+style = []
+script = []
+
+[web.resource.dev]
+style = []
+script = []
+
+[server]
+port = 8000
+
+[bundle]
+identifier = "cn.kaobuddy.desktop"
+publisher = "KaoBuddy"
+icon = ["assets/icons/icon.ico", "assets/icons/icon.png"]
+category = "Education"
+short_description = "A focused postgraduate exam study companion"
+long_description = "KaoBuddy 是本地优先的 Windows 考研搭子，整合计划、资料、B 站课程、练习、模拟考试和错题复习。"
+
+[windows]
+icon_path = "assets/icons/icon.ico"
+webview_install_mode = { type = "DownloadBootstrapper", silent = true }
+
+[windows.nsis]
+install_mode = "CurrentUser"
+start_menu_folder = "KaoBuddy"
+
+[bundle.windows.webview_install_mode.DownloadBootstrapper]
+silent = true
