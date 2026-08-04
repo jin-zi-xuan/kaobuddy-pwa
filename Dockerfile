@@ -1,30 +1,24 @@
-FROM node:22-slim AS frontend-build
+FROM rust:1.96-bookworm AS builder
 
 WORKDIR /app
+RUN rustup target add wasm32-unknown-unknown \
+    && cargo install dioxus-cli --version 0.7.10 --locked
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY Cargo.toml Cargo.lock ./
+COPY rust-app ./rust-app
+RUN cd rust-app && dx build --web --release
 
-COPY index.html tsconfig.json vite.config.ts ./
-COPY public ./public
-COPY src ./src
-RUN npm run build
-
-
-FROM python:3.11-slim
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY --from=builder /app/target/dx/kaobuddy/release/web ./app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY backend ./backend
-COPY main.py ./main.py
-COPY --from=frontend-build /app/backend/static ./backend/static
-
+ENV PORT=8080
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+  CMD ["sh", "-c", "wget -qO- http://127.0.0.1:${PORT}/health >/dev/null || exit 1"]
 
-CMD uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD ["./app/server"]

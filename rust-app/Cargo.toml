@@ -1,0 +1,42 @@
+[package]
+name = "kaobuddy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dioxus = { version = "0.7.3", features = ["fullstack", "router"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+uuid = { version = "1", features = ["v4", "js", "serde"] }
+regex = "1"
+url = { version = "2", features = ["serde"] }
+
+axum = { version = "0.8", optional = true, features = ["macros"] }
+tokio = { version = "1", optional = true, features = ["macros", "rt-multi-thread"] }
+tower-http = { version = "0.6", optional = true, features = ["cors", "trace", "set-header"] }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["json", "rustls-tls"] }
+scraper = { version = "0.23", optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
+futures-util = { version = "0.3", optional = true }
+
+web-sys = { version = "0.3", optional = true, features = ["Window", "Storage"] }
+wasm-bindgen = { version = "0.2", optional = true }
+gloo-net = { version = "0.6", optional = true }
+
+[features]
+default = []
+web = ["dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-net"]
+server = [
+  "dioxus/server",
+  "dep:axum",
+  "dep:tokio",
+  "dep:tower-http",
+  "dep:reqwest",
+  "dep:scraper",
+  "dep:tracing",
+  "dep:tracing-subscriber",
+  "dep:futures-util",
+]

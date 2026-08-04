@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="KaoBuddy">
+  <defs>
+    <linearGradient id="bg" x1="22" y1="14" x2="108" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#216258"/>
+      <stop offset="1" stop-color="#103B35"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="34" y1="26" x2="92" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2D377"/>
+      <stop offset="1" stop-color="#D7A33A"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <path d="M32 28h18v72H32V28Z" fill="#F8F4E6"/>
+  <path d="M55 63 93 28h-24L49 47v31l22 22h25L55 63Z" fill="url(#gold)"/>
+  <path d="M54 63 86 100H63L42 75l12-12Z" fill="#F8F4E6" opacity=".92"/>
+  <path d="M31 105h66v7H31v-7Z" fill="#D7A33A"/>
+</svg>

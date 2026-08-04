@@ -7,53 +7,39 @@ on:
     branches: [main]
 
 jobs:
-  backend:
-    name: "Python (${{ matrix.python-version }})"
+  rust:
+    name: Rust and Dioxus
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: ${{ matrix.python-version }}
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test server
+        run: cargo test -p kaobuddy --features server
+      - name: Clippy server
+        run: cargo clippy -p kaobuddy --features server -- -D warnings
+      - name: Check web target
+        run: cargo check -p kaobuddy --target wasm32-unknown-unknown --features web
 
-      - name: Install Python dependencies
-        run: pip install -e ".[test]"
-
-      - name: Python syntax check
-        run: python -m py_compile backend/app/*.py
-
-      - name: Run pytest
-        run: pytest -q
-
-  frontend:
-    name: "Node (${{ matrix.node-version }})"
+  legacy-compatibility:
+    name: Legacy compatibility tests
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: ["22"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: ${{ matrix.node-version }}
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
           cache: npm
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: Vite build
-        run: npx vite build
+      - run: pip install -e ".[test]"
+      - run: npm ci
+      - run: pytest -q
+      - run: npx tsc --noEmit
+      - run: node --import tsx --test tests/frontend/*.test.ts

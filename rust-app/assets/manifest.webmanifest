@@ -1,0 +1,17 @@
+{
+  "name": "KaoBuddy 考研搭子",
+  "short_name": "KaoBuddy",
+  "description": "把资料、计划、练习和 B 站课程放进同一个考研工作台。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f5f1",
+  "theme_color": "#17251f",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

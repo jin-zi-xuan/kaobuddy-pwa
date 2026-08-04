@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 node_modules/
 dist/
+target/
 .agents/
 .github/skills/
 backend/static/assets/
