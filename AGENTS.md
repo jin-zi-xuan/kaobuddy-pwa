@@ -5,7 +5,7 @@
 ## 基本偏好
 
 - 默认语言：Rust。
-- 默认全栈框架：Dioxus 0.7，服务端使用其 Axum 集成。
+- 默认界面框架：Dioxus 0.7 Desktop。
 - 文档和说明优先用中文，语气自然一点，不要太官方。
 - 改代码前先读项目结构，优先跑现有测试。
 - 不做大而空的重构，不顺手改无关文件。
@@ -24,8 +24,9 @@
 ## 当前产品形态
 
 - 产品定位是长期陪伴型的“考研搭子”应用。
-- 默认入口是 `open-kaobuddy.command` 或 Windows 下的 `open-kaobuddy.bat`。
-- Rust 服务端与 Dioxus Web 前端都在 `rust-app/`。
+- 唯一默认入口是 Windows 下的 `open-kaobuddy.bat`。
+- 当前产品是独立 Windows 桌面 APP，不以 Web/PWA 交付，不要求 localhost。
+- Rust 原生逻辑与 Dioxus Desktop 界面都在 `rust-app/`。
 - Python/FastAPI 与 React/Vite 代码只保留为迁移兼容层，不是当前默认启动入口。
 
 ## 本地目录
@@ -44,15 +45,9 @@
 
 ```bash
 cargo fmt --all -- --check
-cargo test -p kaobuddy --features server
-cargo clippy -p kaobuddy --features server -- -D warnings
-cargo check -p kaobuddy --target wasm32-unknown-unknown --features web
+cargo test -p kaobuddy
+cargo clippy -p kaobuddy -- -D warnings
+cargo build -p kaobuddy --release --features bundle
 ```
 
-涉及页面体验时，需要用浏览器实际打开：
-
-```text
-http://127.0.0.1:8000
-```
-
-如果用户要求“我也要看得到”，就用 Computer Use 操作 Finder/浏览器做可见测试，不只是在后台 curl。
+涉及界面体验时，需要用 `dx serve --desktop` 启动真实 Windows 窗口，并用 Computer Use 做可见测试。

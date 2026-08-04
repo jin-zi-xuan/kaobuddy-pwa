@@ -1,43 +1,34 @@
-# v0.2.0 发布检查
+# v2.0.0 Windows 桌面版发布检查
 
-发布日期：2026-05-31
+## 产品形态
 
-## 发布目标
+- [x] Dioxus Desktop 独立 Windows 窗口。
+- [x] 启动不打开浏览器，不监听 localhost。
+- [x] 窗口标题、应用图标、默认尺寸和最小尺寸正确。
+- [x] NSIS `.exe` 当前用户安装包可生成。
+- [x] 安装器使用 WebView2 Bootstrapper，避免把完整运行时塞进安装包。
 
-第二版把考搭子从单页工具推进到项目化学习工作台：Mac / Windows 都能双击启动，首页连接 AI 和创建项目，进入项目后用总览、资料、计划、复盘分页推进。
+## 功能
 
-## 已完成
+- [x] 可创建考研项目并进入工作台。
+- [x] 数据写入 Windows 本地应用数据目录。
+- [x] 关闭并重新打开后恢复项目。
+- [x] 学习计划、资料库、模拟考试、错题和 AI 设置入口可用。
+- [x] B 站 BV/AV 链接可在桌面 APP 内播放。
+- [x] 视频可保存为资料并记录课程笔记。
+- [x] AI 请求不依赖 KaoBuddy 后端服务。
 
-- [x] FastAPI 后端接口可启动。
-- [x] FastAPI 可直接托管 React/Vite 构建后的页面。
-- [x] `open-kaobuddy.command` 可作为 macOS 本地启动入口。
-- [x] `open-kaobuddy.bat` 可作为 Windows 本地启动入口。
-- [x] API 设置默认只显示平台和 API Key。
-- [x] 首页标题保留“考搭子”，并提供 AI 连接和创建项目入口。
-- [x] 支持左侧项目侧边栏。
-- [x] 支持项目内总览、资料、计划、复盘分页。
-- [x] 支持 AI 计划拆成知识点模块。
-- [x] 支持模块在待学、学习中、已完成之间拖拽。
-- [x] 支持错题、薄弱项和模考记录。
-- [x] IndexedDB v2 本地保存项目、资料、AI 输出和学习闭环数据。
-- [x] JSON v2 导出导入，并兼容 v1 导入。
-- [x] README、Roadmap、Changelog 已准备。
+## 验证
 
-## 验证记录
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo test -p kaobuddy`
+- [x] `cargo clippy -p kaobuddy -- -D warnings`
+- [x] `cargo test -p kaobuddy --no-default-features --features server`
+- [x] `dx bundle --desktop --release --features bundle --package-types nsis`
+- [x] Computer Use 实测真实 Windows 窗口和 B 站播放器。
 
-- [x] `.venv/bin/pytest -q`
-- [x] `node node_modules/typescript/bin/tsc --noEmit`
-- [x] `python3 -m py_compile backend/app/*.py`
-- [x] `node node_modules/vite/bin/vite.js build`
-- [ ] Windows 双击 `open-kaobuddy.bat` 可见验收
+## 发布前限制
 
-## 已知限制
-
-- Windows 启动脚本已写好，但当前这台机器无法真实双击验证 Windows。
-- B站字幕导入仍依赖公开字幕和页面可访问性，失败时需要手动粘贴字幕或重点。
-- PDF 页面视觉识别已经接入 AI，但效果会受模型能力、课件清晰度和页数影响。
-- 手机端拖拽不如桌面端顺手，移动端先用延期和容量提示辅助调整。
-
-## v0.2.0 发布口径
-
-考搭子 v0.2.0 开始像一个每天能打开用的备考工作台：不同科目在侧边栏里切换，每个项目都有自己的资料、模块计划和复盘记录。
+- [ ] 配置商业 Windows 代码签名证书；当前安装包会显示未知发布者。
+- [ ] 在干净 Windows 10 / 11 设备执行安装、升级、卸载测试。
+- [ ] 使用真实 API Key 分别验证计划与模拟卷生成。

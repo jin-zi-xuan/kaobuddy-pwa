@@ -1,67 +1,36 @@
-# Rust + Dioxus 迁移说明
+# Rust + Dioxus Desktop 迁移说明
 
-## 迁移目标
+## 最终交付目标
 
-这次迁移把 KaoBuddy 从临时备考工具调整为长期陪伴型的考研搭子，同时保持已有的学习闭环：资料进入、拆计划、按模块学习、练习、模拟考试、错题复习和临考速背。
+KaoBuddy 的当前产品是 Windows 桌面端考研搭子，不是网站或 PWA。程序通过 Dioxus Desktop 创建原生窗口，Rust 代码直接运行在 Windows 上，界面由系统 WebView2 渲染。
 
 ## 技术映射
 
 | 旧实现 | 当前实现 |
 |---|---|
-| React 19 + Vite | Dioxus 0.7 Web |
-| FastAPI + uvicorn | Dioxus Fullstack + Axum |
-| Pydantic | Serde 数据模型 |
-| httpx | reqwest |
-| IndexedDB / localStorage | Dioxus 状态 + localStorage |
-| Python 视频页面解析 | reqwest + scraper + Rust 链接解析 |
-| FastAPI 静态托管 | Dioxus asset pipeline |
+| React 19 + Vite | Dioxus 0.7 Desktop |
+| FastAPI 常驻服务 | Rust 原生应用逻辑 |
+| 浏览器 localStorage | `%LOCALAPPDATA%` JSON 数据文件 |
+| 浏览器请求 localhost | 原生 reqwest 直接请求 AI 服务商 |
+| Web/PWA 安装 | NSIS `.exe` Windows 安装包 |
+| 浏览器页面 | 独立 Windows 原生窗口 |
 
-## API 兼容
+## 桌面窗口
 
-Rust 服务端保留以下路径：
-
-- `GET /health`
-- `POST /api/invite/verify`
-- `POST /api/ai/test`
-- `POST /api/ai/chat`
-- `POST /api/ai/plan`
-- `POST /api/ai/daily-plan`
-- `POST /api/ai/memorize`
-- `POST /api/ai/teach`
-- `POST /api/ai/cards`
-- `POST /api/ai/cards/stream`
-- `POST /api/ai/practice`
-- `POST /api/ai/module-practice`
-- `POST /api/ai/grade-practice`
-- `POST /api/ai/mock-exam`
-- `POST /api/ai/grade-mock`
-- `POST /api/ocr/handwriting`
-- `POST /api/video/import`
-
-请求继续接受 `api_config` / `apiConfig` 和 `inviteCode`。AI 服务仍使用 OpenAI-compatible `chat/completions` 协议。
-
-## 视觉重绘
-
-设计方向从玻璃拟态和卡片堆叠调整为日常高频工作台：
-
-- 深墨绿作为品牌和导航基底
-- 柔和灰白承载长时间阅读
-- 珊瑚橙只用于当前重点、错误和关键反馈
-- 面板统一 8-16px 圆角，不使用大面积透明玻璃
-- 动效只用于页面进入、按钮反馈和状态变化
-- 支持系统明暗模式与 `prefers-reduced-motion`
-- 移动端把侧栏折叠为可横向滚动的顶部导航
+- 默认尺寸：1280 × 820
+- 最小尺寸：920 × 640
+- 发布构建隐藏控制台窗口
+- 安装包使用当前用户安装模式
+- 安装器在缺少 WebView2 时下载官方 Bootstrapper
 
 ## B 站视频
 
-前端从 BV/AV 链接生成官方播放器地址，服务端解析公开视频标题和描述。播放器通过 CSP 明确允许 `https://player.bilibili.com`，其他第三方 frame 默认禁止。
+应用从 BV/AV 链接生成 `player.bilibili.com` 官方嵌入地址，并直接显示在桌面 WebView 中。KaoBuddy 不下载视频；登录、清晰度和地区限制仍由 B 站决定。
 
-## 遗留代码
+## 本地数据
 
-`backend/` 与根目录 `src/` 暂时保留，作用是：
+项目、任务、资料、课程、错题和 API 配置保存在 Windows 本地应用数据目录。桌面版不依赖浏览器存储，关闭窗口后可在下次启动恢复。
 
-1. 对照旧业务提示词和边界行为。
-2. 运行迁移期回归测试。
-3. 为旧数据导入提供类型参考。
+## 兼容层
 
-等 Rust 版本完成真实用户数据迁移验证后，再单独开 issue 删除遗留实现。
+`server.rs`、`backend/` 和根目录 `src/` 暂时保留，仅用于旧 API 与数据行为回归，不参与 Windows 桌面版的正常启动。

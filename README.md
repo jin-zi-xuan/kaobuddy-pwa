@@ -1,103 +1,99 @@
 # KaoBuddy 考研搭子
 
-KaoBuddy 是一个本地优先的考研学习工作台。它把考试目标、每日计划、学习资料、B 站课程、练习、模拟考试、错题和速背内容放在一起，让你每次打开都知道下一步该做什么。
-
-当前主版本已经迁移到 Rust + Dioxus。旧版 React + FastAPI 代码仍保留在仓库中，用于数据迁移和 API 兼容验证，但不再是默认入口。
+KaoBuddy 是一个真正的 Windows 桌面端考研学习工作台。它用 Rust + Dioxus Desktop 构建，打开后是独立原生窗口，不需要浏览器、localhost 或常驻后端服务。
 
 ## 现在能做什么
 
-- 建立考研项目，记录考试日期、每日时间、目标分数和薄弱项
-- 用今天视图查看倒计时、总进度和当前最该完成的学习块
-- 管理待学习、进行中、已完成的知识模块
-- 导入文字、PDF、文档、手写照片和视频资料
-- 粘贴 B 站 BV/AV 链接，在应用内使用官方播放器观看课程
-- 把视频同步保存为学习资料，边看边整理笔记
-- 连接任意 OpenAI-compatible 模型，生成计划、讲解、练习、卡片和模拟卷
-- 保存错题、薄弱项和临考速背内容
-- 浏览器本地保存学习数据和 API 配置
-- 作为 PWA 安装到桌面或手机主屏幕
+- 建立考研目标，记录考试日期、每日时间、目标分数和薄弱项
+- 管理今天、待学习、进行中和已完成的学习块
+- 导入文字、PDF、文档、手写照片和课程资料
+- 粘贴 B 站 BV/AV 链接，在桌面 APP 内使用官方播放器看课
+- 保存课程笔记，联动资料库
+- 连接 OpenAI-compatible 模型，生成计划和模拟卷
+- 保存错题、速背内容、学习数据和 AI 配置
 
-## 直接启动
+## 直接启动桌面版
 
-需要先安装 [Rust](https://rustup.rs)。第一次启动会自动安装 Dioxus CLI 和 WebAssembly target。
+开发环境第一次运行需要安装 [Rust](https://rustup.rs)。之后双击：
 
-Windows：
-
-```powershell
+```text
 open-kaobuddy.bat
 ```
 
-macOS：
+脚本会直接打开 KaoBuddy 桌面窗口，不会启动浏览器。
 
-```bash
-chmod +x open-kaobuddy.command
-./open-kaobuddy.command
+## 生成 Windows 安装包
+
+双击：
+
+```text
+build-windows-installer.bat
 ```
 
-启动后访问 `http://127.0.0.1:8000`。
+生成的 NSIS `.exe` 安装包位于：
+
+```text
+rust-app/desktop-dist/Kaobuddy_2.0.0_x64-setup.exe
+```
+
+安装包当前未做商业代码签名，Windows 可能显示“未知发布者”。正式对外发布前需要配置代码签名证书。
+
+安装包按当前用户安装，并在需要时静默安装 Microsoft WebView2 Bootstrapper。
 
 ## 开发
 
-```bash
-rustup target add wasm32-unknown-unknown
+```powershell
 cargo install dioxus-cli --version 0.7.10 --locked
 cd rust-app
-dx serve --web --port 8000
+dx serve --desktop
 ```
 
 ## 验证
 
-```bash
+```powershell
 cargo fmt --all -- --check
-cargo test -p kaobuddy --features server
-cargo clippy -p kaobuddy --features server -- -D warnings
-cargo check -p kaobuddy --target wasm32-unknown-unknown --features web
+cargo test -p kaobuddy
+cargo clippy -p kaobuddy -- -D warnings
+cargo build -p kaobuddy --release --features bundle
 ```
 
-迁移期仍保留旧版兼容测试：
+构建完整安装包：
 
-```bash
-python -m pip install -e ".[test]"
+```powershell
+cd rust-app
+dx bundle --desktop --release --features bundle --package-types nsis
+```
+
+迁移期兼容测试：
+
+```powershell
+cargo test -p kaobuddy --no-default-features --features server
 python -m pytest -q
-npm ci
 npx tsc --noEmit
 node --import tsx --test tests/frontend/*.test.ts
 ```
 
-## 目录
-
-```text
-.
-├── rust-app/                # 当前 Rust + Dioxus 主应用
-│   ├── assets/              # 视觉、PWA 与静态资源
-│   └── src/
-│       ├── main.rs          # Dioxus / Axum 启动入口
-│       ├── server.rs        # 旧 API 兼容层、AI 代理、视频解析
-│       ├── ui.rs            # Dioxus 界面与主要交互
-│       ├── models.rs        # 学习数据模型
-│       ├── storage.rs       # 浏览器本地存储
-│       └── bilibili.rs      # B 站链接与官方播放器地址解析
-├── backend/                 # 旧 FastAPI 兼容参考
-├── src/                     # 旧 React 兼容参考
-├── tests/                   # 旧行为回归测试
-├── Cargo.toml               # Rust workspace
-└── open-kaobuddy.*          # 双击启动入口
-```
-
-## B 站播放说明
-
-KaoBuddy 使用 `player.bilibili.com` 官方嵌入播放器，不下载或转存视频。公开视频能否播放、清晰度、登录状态和地区限制由 B 站决定。字幕抓取仍是 best-effort，视频没有公开字幕时可以手动粘贴课程笔记。
-
 ## 数据与隐私
 
-- 学习项目、任务、资料索引和设置默认保存在浏览器本地
-- 自带 API Key 模式下，Key 不写入 KaoBuddy 服务端数据库
-- 服务端只负责同源 API、AI 代理兼容和公开视频信息读取
-- 不提供账号、付费和云同步
+- 学习数据保存在 `%LOCALAPPDATA%\KaoBuddy\KaoBuddy\data\kaobuddy-data.json`
+- API Key 只写入本机数据文件；调用模型时直接发送给用户配置的 AI 服务商
+- 不需要 KaoBuddy 账号，也不提供云同步
+- B 站视频使用官方嵌入播放器，不下载或转存视频
 
-## 迁移说明
+## 项目结构
 
-旧版 API 路径继续保留，包括 `/api/ai/plan`、`/api/ai/daily-plan`、`/api/ai/teach`、`/api/ai/cards`、`/api/ai/practice`、`/api/ai/mock-exam`、`/api/ocr/handwriting` 和 `/api/video/import`。详细映射见 [docs/RUST_DIOXUS_MIGRATION.md](docs/RUST_DIOXUS_MIGRATION.md)。
+```text
+rust-app/
+├── assets/                 # 桌面视觉、图片和 Windows 图标
+└── src/
+    ├── main.rs             # Dioxus Desktop 原生窗口入口
+    ├── ui.rs               # 考研搭子界面与交互
+    ├── client.rs           # 原生 AI 请求
+    ├── storage.rs          # Windows 本地文件存储
+    ├── models.rs           # 学习数据模型
+    ├── bilibili.rs         # B 站官方播放器地址
+    └── server.rs           # 迁移期旧 API 兼容层
+```
 
 ## 许可
 

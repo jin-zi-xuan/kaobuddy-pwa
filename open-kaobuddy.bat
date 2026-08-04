@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
 where cargo >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
@@ -21,9 +22,7 @@ if %ERRORLEVEL% NEQ 0 (
   )
 )
 
-rustup target add wasm32-unknown-unknown >nul 2>nul
-start "" "http://127.0.0.1:8000"
 cd rust-app
-dx serve --web --port 8000
+dx serve --desktop --open false
 
 endlocal

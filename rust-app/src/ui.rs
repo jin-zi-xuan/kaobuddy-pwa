@@ -31,8 +31,10 @@ pub fn App() -> Element {
         document::Meta { name: "theme-color", content: "#17251f" }
         document::Meta { name: "color-scheme", content: "light dark" }
         document::Link { rel: "stylesheet", href: CSS }
-        document::Link { rel: "manifest", href: "/manifest.webmanifest" }
-        document::Script { src: "/register-sw.js" }
+        if cfg!(all(feature = "web", not(feature = "desktop"))) {
+            document::Link { rel: "manifest", href: "/manifest.webmanifest" }
+            document::Script { src: "/register-sw.js" }
+        }
         if has_project {
             Workspace { data }
         } else {
@@ -94,7 +96,7 @@ fn Onboarding(data: Signal<AppData>) -> Element {
                 }
                 div { class: "trust-note",
                     strong { "本地优先" }
-                    span { "学习数据保存在你的浏览器里，API Key 不进入 KaoBuddy 数据库。" }
+                    span { "学习数据和 API Key 只保存在这台 Windows 电脑里。" }
                 }
                 img { class: "study-image", src: STUDY_IMAGE, alt: "夜晚在书桌前专注复习的学生" }
             }
@@ -763,13 +765,13 @@ fn SettingsPage(data: Signal<AppData>, notice: Signal<String>) -> Element {
         let mut data = data;
         data.set(next);
         let mut notice = notice;
-        notice.set("AI 配置已保存在当前浏览器。".into());
+        notice.set("AI 配置已保存在这台 Windows 电脑。".into());
     };
     rsx! {
         section { class: "page-enter settings-layout",
             div { class: "settings-copy",
                 h2 { "连接你自己的 AI" }
-                p { "支持 OpenAI-compatible 接口。请求经当前 KaoBuddy 进程转发，API Key 不会写入服务端数据库。" }
+                p { "支持 OpenAI-compatible 接口。原生 Rust 会直接请求你配置的服务商，不需要 KaoBuddy 后端。" }
                 div { class: "privacy-callout",
                     strong { "使用建议" }
                     p { "如果模型不支持图片，请先用 PDF 文字层或粘贴文本。需要识别手写图片时选择支持视觉的模型。" }
