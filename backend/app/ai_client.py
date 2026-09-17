@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 from .schemas import ApiConfig, ChatMessage
+from .outbound import ai_transport
 
 
 class AiClientError(RuntimeError):
@@ -103,7 +104,10 @@ async def chat_completion_with_usage(api_config: ApiConfig, messages: List[ChatM
     }
 
     try:
-        async with httpx.AsyncClient(timeout=completion_timeout_seconds(api_config)) as client:
+        async with httpx.AsyncClient(
+            timeout=completion_timeout_seconds(api_config), transport=ai_transport(),
+            trust_env=False, follow_redirects=True,
+        ) as client:
             response = await client.post(endpoint, json=payload, headers=headers)
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -138,7 +142,10 @@ async def chat_completion_stream(api_config: ApiConfig, messages: List[ChatMessa
     }
 
     try:
-        async with httpx.AsyncClient(timeout=completion_timeout_seconds(api_config, stream=True)) as client:
+        async with httpx.AsyncClient(
+            timeout=completion_timeout_seconds(api_config, stream=True), transport=ai_transport(),
+            trust_env=False, follow_redirects=True,
+        ) as client:
             async with client.stream("POST", endpoint, json=payload, headers=headers) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -154,9 +161,7 @@ async def chat_completion_stream(api_config: ApiConfig, messages: List[ChatMessa
                                 yield content
                         except (_json.JSONDecodeError, KeyError, IndexError, TypeError):
                             # Malformed SSE chunk — log and skip, don't break the stream.
-                            logging.getLogger("kaobuddy").warning(
-                                "stream chunk parse failed", raw=data_str[:200]
-                            )
+                            logging.getLogger("kaobuddy").warning("stream chunk parse failed")
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:400]
         raise AiClientError(f"AI 服务返回错误：{exc.response.status_code} {detail}") from exc

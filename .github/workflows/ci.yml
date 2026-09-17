@@ -52,6 +52,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Frontend regression tests
+        run: npm test
+
       - name: TypeScript type check
         run: npx tsc --noEmit
 

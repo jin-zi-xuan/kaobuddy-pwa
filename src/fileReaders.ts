@@ -1,4 +1,4 @@
-import mammoth from "mammoth";
+import { extractRtfText } from "./rtf";
 import { extractLegacyDocText } from "./legacyDoc";
 
 // pdfjs-dist is ~2.2 MB — only load it when the user actually imports a PDF.
@@ -29,31 +29,27 @@ export function readAsDataUrl(file: File): Promise<string> {
 
 export async function readPdfText(file: File): Promise<string> {
   const pdfjsLib = await _getPdfLib();
-  const data = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
-  const pages: string[] = [];
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const text = content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
-    pages.push(`第 ${pageNumber} 页\n${text}`);
-  }
-  return pages.join("\n\n");
-}
-
-function stripRtf(text: string) {
-  return text
-    .replace(/\\par[d]?/g, "\n")
-    .replace(/\\'[0-9a-fA-F]{2}/g, "")
-    .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
-    .replace(/[{}]/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const task = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
+  try {
+    const pdf = await task.promise;
+    const pages: string[] = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      try {
+        const content = await page.getTextContent();
+        const text = content.items.map((item) => ("str" in item ? item.str : "")).join(" ").trim();
+        if (text) pages.push(`第 ${pageNumber} 页\n${text}`);
+      } finally { page.cleanup(); }
+    }
+    if (!pages.length) throw new Error("这个 PDF 没有可读取的文字层，请使用「手写 PDF」进行视觉识别，或手动转文字后导入。");
+    return pages.join("\n\n");
+  } finally { await task.destroy(); }
 }
 
 export async function readDocumentText(file: File): Promise<string> {
   const lower = file.name.toLowerCase();
   if (lower.endsWith(".docx")) {
+    const { default: mammoth } = await import("mammoth");
     const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
     const warnings = result.messages.map((message) => message.message).filter(Boolean);
     const text = result.value.trim();
@@ -61,7 +57,7 @@ export async function readDocumentText(file: File): Promise<string> {
     return [`Word 正文\n${text}`, warnings.length ? `\n读取提醒：${warnings.join("；")}` : ""].filter(Boolean).join("\n");
   }
   if (lower.endsWith(".rtf")) {
-    const text = stripRtf(await file.text());
+    const text = extractRtfText(await file.arrayBuffer());
     if (!text) throw new Error("这个 RTF 没提取到正文，可以另存为 DOCX 或 PDF 后再导入。");
     return `RTF 正文\n${text}`;
   }
@@ -126,31 +122,66 @@ export async function readPresentationText(file: File): Promise<string> {
   return `PPT 正文\n${content}`;
 }
 
-export async function readPdfForAi(file: File): Promise<{ text: string; pageImages: string[]; pageCount: number }> {
+export type PdfAiBatch = {
+  text: string;
+  pageImages: string[];
+  pageCount: number;
+  startPage: number;
+  endPage: number;
+};
+
+export type PdfAiOptions = {
+  /** 每批最多 6 页；无回调时超过此页数会明确报错。 */
+  maxPages?: number;
+  onBatch?: (batch: PdfAiBatch) => Promise<void>;
+};
+
+export async function readPdfForAi(file: File, options: PdfAiOptions = {}): Promise<{ text: string; pageImages: string[]; pageCount: number }> {
+  const maxPages = options.maxPages ?? 6;
+  if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 6) throw new Error("PDF 每批识别页数必须在 1 到 6 页之间。");
   const pdfjsLib = await _getPdfLib();
-  const data = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
-  const pages: string[] = [];
-  const pageImages: string[] = [];
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const text = content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
-    pages.push(`第 ${pageNumber} 页\n${text}`);
-
-    const viewport = page.getViewport({ scale: 1 });
-    const maxWidth = 1000;
-    const scale = Math.min(1.6, Math.max(0.8, maxWidth / viewport.width));
-    const renderViewport = page.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    if (!context) continue;
-    canvas.width = Math.floor(renderViewport.width);
-    canvas.height = Math.floor(renderViewport.height);
-    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
-    pageImages.push(canvas.toDataURL("image/jpeg", 0.72));
-  }
-
-  return { text: pages.join("\n\n"), pageImages, pageCount: pdf.numPages };
+  const task = pdfjsLib.getDocument({ data: await file.arrayBuffer(), stopAtErrors: true });
+  try {
+    const pdf = await task.promise;
+    if (!options.onBatch && pdf.numPages > maxPages) throw new Error(`这个 PDF 超过 ${maxPages} 页，需要分批视觉识别。`);
+    const pages: string[] = [];
+    let batchText: string[] = [];
+    let pageImages: string[] = [];
+    let startPage = 1;
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const canvas = document.createElement("canvas");
+      try {
+        const content = await page.getTextContent();
+        const text = content.items.map((item) => ("str" in item ? item.str : "")).join(" ").trim();
+        if (text) {
+          const labeled = `第 ${pageNumber} 页\n${text}`;
+          pages.push(labeled);
+          batchText.push(labeled);
+        }
+        const viewport = page.getViewport({ scale: 1 });
+        // 宽、高及像素面积都设限，长卷或超大页面也不会撑爆 canvas。
+        const scale = Math.min(1.6, 1400 / viewport.width, 2000 / viewport.height, Math.sqrt(2_000_000 / (viewport.width * viewport.height)));
+        if (!Number.isFinite(scale) || scale <= 0) throw new Error(`PDF 第 ${pageNumber} 页尺寸异常，请重新导出后再试。`);
+        const renderViewport = page.getViewport({ scale });
+        canvas.width = Math.max(1, Math.floor(renderViewport.width));
+        canvas.height = Math.max(1, Math.floor(renderViewport.height));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("当前浏览器无法渲染 PDF 页面，请换一个浏览器后重试。");
+        await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+        pageImages.push(canvas.toDataURL("image/jpeg", 0.8));
+      } finally {
+        canvas.width = 0;
+        canvas.height = 0;
+        page.cleanup();
+      }
+      if (options.onBatch && (pageImages.length === maxPages || pageNumber === pdf.numPages)) {
+        await options.onBatch({ text: batchText.join("\n\n"), pageImages, pageCount: pdf.numPages, startPage, endPage: pageNumber });
+        pageImages = [];
+        batchText = [];
+        startPage = pageNumber + 1;
+      }
+    }
+    return { text: pages.join("\n\n"), pageImages, pageCount: pdf.numPages };
+  } finally { await task.destroy(); }
 }

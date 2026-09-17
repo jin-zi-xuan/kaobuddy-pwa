@@ -67,7 +67,7 @@ DIST_DIR = PATHS.dist_dir
 PUBLIC_DIR = PATHS.public_dir
 
 
-app = FastAPI(title="KaoBuddy API", version="1.0.0")
+app = FastAPI(title="KaoBuddy API", version="1.2.4")
 
 _raw_origins = os.getenv(
     "ALLOWED_ORIGINS",
@@ -133,7 +133,7 @@ class _CspMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
+            "script-src 'self' 'wasm-unsafe-eval'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "

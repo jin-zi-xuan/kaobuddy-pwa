@@ -176,3 +176,12 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
 | assets 404 | hash 文件名不匹配 | 同上，确保 build 产物和 index.html 一致 |
 | 刷新白屏 | SPA fallback 缺失 | 检查 `main.py` 最后的 catch-all 路由 |
 | `backend` 导入失败 | 包路径问题 | Docker 内检查 `/app/backend/__init__.py` 存在 |
+
+
+## 请求安全与本地模型
+
+默认只允许后端访问公网 HTTP/HTTPS 地址。AI、视频及字幕请求都会校验 DNS 结果，固定连接到已验证的 IP，重定向也要重新校验。环境代理不参与这些请求。
+
+自己在本机运行 Ollama 等服务时，可以显式设置 `KAOBUDDY_ALLOW_PRIVATE_AI=1`。它只放行 AI 的本机/私网地址，视频和字幕仍限制在公网。不要在公开部署中开启这个选项，否则访问者可能借 AI 接口访问部署机器所在的内网。
+
+BYOK 的 Key 和用于生成的资料会经过 KaoBuddy 后端，再转发给模型服务商，并非浏览器直连。请使用可信的部署环境。

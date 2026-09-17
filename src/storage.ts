@@ -1,4 +1,6 @@
 import type { AiNote, ApiConfig, AppExport, InviteState, Mistake, MockAttempt, StudyMaterial, StudyProject, StudyTask, WeakPoint } from "./types";
+import { restoreCardSession } from "./learningSession";
+import { backupStores, validateBackup } from "./backup";
 import { defaultInviteState, normalizeInviteState } from "./inviteState";
 
 const DB_NAME = "kaobuddy-db";
@@ -69,62 +71,37 @@ function openDb(): Promise<IDBDatabase> {
       runMigrations(request.result, event.oldVersion);
     };
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onblocked = () => reject(new Error("请关闭其他考搭子页面，再重试数据操作。"));
   });
 }
 
 async function getAll<T>(storeName: StoreName): Promise<T[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const request = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result as T[]);
+    const transaction = db.transaction(storeName, "readonly");
+    const request = transaction.objectStore(storeName).getAll();
+    transaction.oncomplete = () => { db.close(); resolve(request.result as T[]); };
+    transaction.onabort = () => { db.close(); reject(transaction.error); };
   });
 }
 
-async function put<T>(storeName: StoreName, value: T): Promise<void> {
+async function write(storeNames: StoreName[], operation: (tx: IDBTransaction) => void): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const request = db.transaction(storeName, "readwrite").objectStore(storeName).put(value);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
+    const tx = db.transaction(storeNames, "readwrite");
+    let failure: unknown;
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = () => { db.close(); reject(failure || tx.error || new Error("数据没有保存，请重试。")); };
+    try { operation(tx); } catch (error) { failure = error; tx.abort(); }
   });
 }
 
-async function clear(storeName: StoreName): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(storeName, "readwrite").objectStore(storeName).clear();
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
-  });
-}
-
-async function deleteById(storeName: StoreName, id: string): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(storeName, "readwrite").objectStore(storeName).delete(id);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
-  });
-}
-
-async function deleteWhereProject(storeName: StoreName, projectId: string): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readwrite");
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      (request.result as { id: string; project_id?: string }[])
-        .filter((item) => item.project_id === projectId)
-        .forEach((item) => store.delete(item.id));
-    };
-    transaction.onerror = () => reject(transaction.error);
-    transaction.oncomplete = () => resolve();
-  });
-}
+const put = <T,>(name: StoreName, value: T) => write([name], tx => { tx.objectStore(name).put(value); });
+const deleteById = (name: StoreName, id: string) => write([name], tx => { tx.objectStore(name).delete(id); });
 
 function normalizeTask(task: StudyTask, index: number): StudyTask {
   const moduleStatus = task.module_status || (task.status === "done" ? "done" : "todo");
@@ -150,22 +127,41 @@ export const storage = {
   weakPoints: () => getAll<WeakPoint>("weak_points"),
   mockAttempts: () => getAll<MockAttempt>("mock_attempts"),
   saveProject: (project: StudyProject) => put("projects", project),
-  deleteProject: async (id: string) => {
-    await Promise.all([
-      deleteWhereProject("materials", id),
-      deleteWhereProject("notes", id),
-      deleteWhereProject("tasks", id),
-      deleteWhereProject("mistakes", id),
-      deleteWhereProject("weak_points", id),
-      deleteWhereProject("mock_attempts", id),
-    ]);
-    await deleteById("projects", id);
-  },
+  deleteProject: (id: string) => write([...backupStores], tx => {
+    tx.objectStore("projects").delete(id);
+    for (const name of backupStores.filter(name => name !== "projects")) {
+      const store = tx.objectStore(name);
+      const cursor = store.openCursor();
+      cursor.onsuccess = () => {
+        if (!cursor.result) return;
+        if (cursor.result.value.project_id === id) cursor.result.delete();
+        cursor.result.continue();
+      };
+    }
+  }),
   saveMaterial: (material: StudyMaterial) => put("materials", material),
   deleteMaterial: (id: string) => deleteById("materials", id),
   saveNote: (note: AiNote) => put("notes", note),
   deleteNote: (id: string) => deleteById("notes", id),
-  saveTask: (task: StudyTask) => put("tasks", task),
+  saveTask: (task: StudyTask) => write(["tasks"], tx => {
+    const store = tx.objectStore("tasks");
+    const request = store.get(task.id);
+    request.onsuccess = () => {
+      const current = request.result as StudyTask | undefined;
+      const value = current ? {...task, memorized: current.memorized,
+        card_session: JSON.stringify(current.cards) === JSON.stringify(task.cards) ? current.card_session : undefined} : task;
+      try { store.put(value); } catch { tx.abort(); }
+    };
+  }),
+  updateTaskLearning: (id: string, patch: Pick<StudyTask, "card_session" | "memorized">) => write(["tasks"], tx => {
+    const store = tx.objectStore("tasks");
+    const request = store.get(id);
+    request.onsuccess = () => {
+      if (!request.result) return;
+      if (patch.card_session && !restoreCardSession(request.result.cards || [], patch.card_session)) return;
+      try { store.put({ ...request.result, ...patch }); } catch { tx.abort(); }
+    };
+  }),
   deleteTask: (id: string) => deleteById("tasks", id),
   saveMistake: (mistake: Mistake) => put("mistakes", mistake),
   deleteMistake: (id: string) => deleteById("mistakes", id),
@@ -193,33 +189,38 @@ export const storage = {
       return defaultInviteState;
     }
   },
-  exportAll: async (): Promise<AppExport> => ({
-    version: 2,
-    exported_at: new Date().toISOString(),
-    projects: await getAll<StudyProject>("projects"),
-    materials: await getAll<StudyMaterial>("materials"),
-    notes: await getAll<AiNote>("notes"),
-    tasks: await getAll<StudyTask>("tasks"),
-    mistakes: await getAll<Mistake>("mistakes"),
-    weak_points: await getAll<WeakPoint>("weak_points"),
-    mock_attempts: await getAll<MockAttempt>("mock_attempts")
-  }),
-  importAll: async (data: AppExport) => {
-    await clear("projects");
-    await clear("materials");
-    await clear("notes");
-    await clear("tasks");
-    await clear("mistakes");
-    await clear("weak_points");
-    await clear("mock_attempts");
-    await Promise.all(data.projects.map((item) => put("projects", item)));
-    await Promise.all(data.materials.map((item) => put("materials", item)));
-    await Promise.all(data.notes.map((item) => put("notes", item)));
-    await Promise.all((data.tasks || []).map((item, index) => put("tasks", normalizeTask(item, index))));
-    await Promise.all((data.mistakes || []).map((item) => put("mistakes", item)));
-    await Promise.all((data.weak_points || []).map((item) => put("weak_points", item)));
-    await Promise.all((data.mock_attempts || []).map((item) => put("mock_attempts", item)));
+  exportAll: async (): Promise<AppExport> => {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([...backupStores], "readonly");
+      const data: Record<string, unknown> = {version: 2, exported_at: new Date().toISOString()};
+      for (const name of backupStores) {
+        const request = tx.objectStore(name).getAll();
+        request.onsuccess = () => { data[name] = request.result; };
+      }
+      tx.oncomplete = () => { db.close(); resolve(data as AppExport); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    });
+  },
+  importAll: async (input: unknown, mode: "merge" | "replace" = "merge") => {
+    const data = validateBackup(input);
+    await write([...backupStores], tx => {
+      for (const name of backupStores) {
+        const store = tx.objectStore(name);
+        if (mode === "replace") store.clear();
+        (data[name] || []).forEach((item, index) => {
+          const value = name === "tasks" ? normalizeTask(item as StudyTask, index) : item;
+          if (mode === "replace") { store.put(value); return; }
+          const existing = store.get(item.id);
+          existing.onsuccess = () => {
+            if (existing.result !== undefined) return;
+            try { store.put(value); } catch { tx.abort(); }
+          };
+        });
+      }
+    });
   }
+
 };
 
 export function createId(prefix: string) {

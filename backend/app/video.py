@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 from .schemas import VideoImportResponse
+from .outbound import SafeOutboundTransport
 
 
 DEFAULT_HEADERS = {
@@ -55,7 +56,10 @@ def _find_subtitle_urls(value: Any) -> List[str]:
 
 async def _fetch_subtitle(url: str) -> Tuple[str, str]:
     normalized = url if url.startswith("http") else f"https:{url}"
-    async with httpx.AsyncClient(timeout=20, headers=DEFAULT_HEADERS) as client:
+    async with httpx.AsyncClient(
+        timeout=20, headers=DEFAULT_HEADERS, transport=SafeOutboundTransport(),
+        trust_env=False, follow_redirects=True,
+    ) as client:
         response = await client.get(normalized)
         response.raise_for_status()
     data = response.json()
@@ -68,7 +72,10 @@ async def import_video_metadata(url: str) -> VideoImportResponse:
     warnings: List[str] = []
     metadata: Dict[str, Any] = {}
 
-    async with httpx.AsyncClient(timeout=20, headers=DEFAULT_HEADERS, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=20, headers=DEFAULT_HEADERS, transport=SafeOutboundTransport(),
+        trust_env=False, follow_redirects=True,
+    ) as client:
         response = await client.get(url)
         response.raise_for_status()
     html = response.text

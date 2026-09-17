@@ -43,7 +43,7 @@
 | 自定义 | 任意 OpenAI-compatible |
 因为deepseek没有多模态，所以暂时只能提取文字，资料多的话生成时间会长一点，请耐心等待。
 支持两种模式：
-- **BYOK（自带 Key）**：填自己的 API Key，请求直接从浏览器发到你的 AI 服务商。Key 存 localStorage，服务端不落盘。
+- **BYOK（自带 Key）**：填自己的 API Key，Key 保存在浏览器 localStorage。生成请求会把 Key 和相关资料发送给 KaoBuddy 后端，再转发给 AI 服务商；后端不主动持久化 Key。云部署时，请只使用你信任的实例。
 - **邀请码（beta）**：如果你有邀请码，可以先不填 Key，用服务端配置的 API 额度体验。用完再切换回你自己的API。
 
 ### 创建考试项目
@@ -56,7 +56,7 @@
 
 | 格式 | 方式 |
 |---|---|
-| PDF | 读取文字层（扫描版也能提取，图表和公式效果取决于模型） |
+| PDF | 普通导入读取文字层；扫描版从手写图片/PDF 入口分批视觉识别，需要支持视觉的模型 |
 | DOCX | 提取正文，mammoth 引擎 |
 | RTF | 提取文本 |
 | TXT / Markdown | 直接读取 |
@@ -64,7 +64,7 @@
 | 手写笔记 | 上传图片或手写 PDF → AI 视觉识别 → 转文字入库 |
 | B 站视频 | 粘贴链接 → 自动抓取公开信息和字幕 |
 
-文件在浏览器端解析，不上传到服务器。超大 PDF 用分片策略，每次只取一层文字，秒级读完。
+普通文件先在浏览器端解析。调用 AI 时，相关正文会经过 KaoBuddy 后端发送给模型服务商；手写图片和扫描 PDF 的页面图像也会发给视觉模型。PDF 逐页读取，无文字层会提示切换视觉识别，速度取决于页数与设备。
 
 ### 知识模块计划
 
@@ -129,7 +129,7 @@
 
 ### 数据管理
 
-所有数据（项目、资料、计划、模块、错题、模拟考记录）存在浏览器 IndexedDB 里，不经过服务器。支持一键导出 JSON 备份，导入时自动合并。
+项目、资料、计划、模块、错题、模拟考记录和学习进度保存在浏览器 IndexedDB。侧栏或初始化页的「数据备份」可下载 JSON，换设备后导入。默认合并并保留同 ID 的本地记录；选择替换时会先下载当前数据备份，再一次性提交。无效备份或写入失败不会清空原数据。API Key 不包含在备份中。AI 请求的数据流见「连接 AI」。
 
 ---
 
@@ -266,8 +266,8 @@ Railway 也能部署，但需要用你自己的 Railway 账号和额度。更完
 │       ├── Common.tsx        # 通用组件（BrandMark / StatusToast / RenderText）
 │       └── ErrorBoundary.tsx # 错误边界
 ├── tests/
-│   ├── test_api.py          # 后端测试（21 个）
-│   └── frontend/            # 前端测试（36 个）
+│   ├── test_api.py          # 后端测试
+│   └── frontend/            # 前端测试
 ├── public/                  # PWA 资源（sw.js / manifest / 图标）
 ├── Dockerfile               # 多阶段 Docker 构建
 ├── fly.toml                 # Fly.io 配置
@@ -285,14 +285,14 @@ Railway 也能部署，但需要用你自己的 Railway 账号和额度。更完
 
 ```bash
 # Python
-.venv/bin/pytest -q                      # 21 个测试
+.venv/bin/pytest -q                      # 后端回归测试
 python3 -m py_compile backend/app/*.py   # 语法检查
 
 # TypeScript
 npx tsc --noEmit                         # 类型检查
 
 # 前端单元测试
-node --import tsx --test tests/frontend/*.test.ts # 36 个测试
+npm test # 前端回归测试
 
 # 构建检查
 npx vite build                           # 确保能正常打包
@@ -310,6 +310,7 @@ GitHub Actions 在每次 push 和 PR 时自动跑上面全部。CI 文件见 `.g
 |---|---|---|
 | `PORT` | 服务端口 | 8080（Docker）/ 8000（本地） |
 | `ALLOWED_ORIGINS` | CORS 跨域来源（逗号分隔） | `localhost:5173`（本地开发） |
+| `KAOBUDDY_ALLOW_PRIVATE_AI` | 设为 `1` 才允许 AI 访问本机/私网；公网部署勿开启，视频导入始终限制公网 | 关闭 |
 | `KAOBUDDY_AI_BASE_URL` | 邀请码模式 AI 地址 | 无 |
 | `KAOBUDDY_AI_API_KEY` | 邀请码模式 AI Key | 无 |
 | `KAOBUDDY_AI_MODEL` | 邀请码模式模型名 | 无 |
@@ -329,9 +330,10 @@ GitHub Actions 在每次 push 和 PR 时自动跑上面全部。CI 文件见 `.g
 ## 一些边界
 
 - 不做账号系统、不做云同步、不搞付费。你的资料是你自己的，全在浏览器里。
-- API Key 存 localStorage，请求时从浏览器直接发到 AI 服务商。服务端代码开源，你可以自己审查 `backend/app/ai_client.py`——它就是个转发。
+- API Key 存 localStorage，AI 请求通过 KaoBuddy 后端转发。自行云部署时，Key 和相关资料会经过你的服务器；请保护部署环境。
 - B 站视频只抓公开页面信息和字幕（best-effort），不下载视频、不需要登录。
-- 扫描版 PDF 的文字识别效果取决于文字层质量和你接的模型（多模态模型可以直接读图）。
+- 手写入口对 PDF 每页做视觉识别，最多每批 6 页。DeepSeek 不支持视觉识别时会提示更换模型。
+- 首次联网加载、离线资源准备完成后可离线查看已存资料。AI 生成需要网络。发现新版会提示刷新，不会强制打断学习。
 - 旧版 `.doc` 没有可靠的浏览器端解析器。建议用 Word/WPS 另存为 `.docx` 或 PDF，省心很多。
 - 这是一个**备考工具**，不是通用笔记软件。不要期望它做思维导图、间隔重复（Anki 那种）或者协同编辑——这些事情有其他更好的工具做。
 

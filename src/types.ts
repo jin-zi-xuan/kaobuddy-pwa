@@ -72,7 +72,18 @@ export type AiNote = {
   created_at: string;
 };
 
+export type CardSession = {
+  signature: string;
+  queue: string[];
+  progress: Record<string, CardProgress>;
+  round: number;
+  index: number;
+  flipped: boolean;
+};
+
 export type StudyTask = {
+  card_session?: CardSession;
+  memorized?: boolean;
   id: string;
   project_id: string;
   title: string;
