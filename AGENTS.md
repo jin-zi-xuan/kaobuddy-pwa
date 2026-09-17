@@ -26,7 +26,7 @@
 - 第一版主打“直接打开能用”。
 - 默认入口是 `open-kaobuddy.command`。
 - FastAPI 直接托管当前可用页面：`backend/static/index.html`。
-- React/Vite 代码暂时作为后续增强前端保留，不是当前默认启动入口。
+- React/Vite 是当前默认前端，构建产物输出到 `backend/static/`，由 FastAPI 托管。
 
 ## 本地目录
 

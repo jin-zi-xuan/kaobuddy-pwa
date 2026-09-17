@@ -2266,3 +2266,38 @@ form, .stack { display: grid; gap: 14px; }
 .pdf-render-container .pdf-table th, .pdf-render-container .pdf-table td { padding: 8px 10px; border: 1px solid #888; text-align: left; vertical-align: top; line-height: 1.55; }
 .pdf-render-container .pdf-table th { background: #eee; font-weight: 700; }
 .pdf-render-container .pdf-table tr:nth-child(even) td { background: #fafafa; }
+
+/* 备份入口保持在当前页面，手机上可从项目菜单展开。 */
+.backup-control { min-width: 0; }
+.backup-control > button { width: 100%; }
+.backup-panel { padding: 14px; margin-top: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.backup-panel h2 { font-size: 18px; }
+.backup-panel p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.backup-panel input { max-width: 100%; }
+.mobile-project-menu { display: none; }
+@media (max-width: 680px) {
+  .sidebar { gap: 10px; }
+  .sidebar .brand { display: flex; justify-content: space-between; align-items: center; padding: 0; border: 0; }
+  .mobile-project-menu { display: inline-flex; width: auto; min-height: 44px; padding: 8px 12px; }
+  .sidebar:not(.expanded) > :not(.brand) { display: none; }
+  .sidebar .project-actions button { min-height: 44px; }
+  .workspace { gap: 10px; }
+  .workspace-head { grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding-bottom: 10px; align-items: center; }
+  .workspace-head h1 { font-size: 26px; margin: 4px 0; }
+  .workspace-head p { font-size: 12px; margin: 4px 0; }
+  .workspace-head .eyebrow { display: none; }
+  .progress-card { padding: 8px; gap: 4px; max-width: 108px; }
+  .progress-card > span { display: none; }
+  .progress-ring { width: 48px; height: 48px; }
+  .progress-ring strong { font-size: 15px; }
+  .progress-card small { font-size: 11px; }
+  .workspace > .status { margin: 0; padding: 8px 12px; min-height: 36px; font-size: 12px; }
+  .tabs { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin: 0; padding: 5px; overflow: visible; border-radius: 16px; background: #edf5ef; }
+  .tabs .tab { width: 100%; min-width: 0; min-height: 44px; padding: 8px 4px; gap: 5px; font-size: 13px; }
+  .panel { min-width: 0; }
+}
+@media (max-width: 680px) {
+  .app-shell { align-content: start; }
+  .tabs { width: 100%; max-width: 100%; }
+  .progress-card small { white-space: nowrap; font-size: 10px; }
+}

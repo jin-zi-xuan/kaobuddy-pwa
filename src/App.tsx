@@ -8,10 +8,11 @@ import {
 } from "@phosphor-icons/react";
 import { assertImageRecognitionSupported, gradeMock, gradePractice, importVideo, recognizeHandwriting, runAi, runCardsStream, runDailyPlan, runMemorize, runModulePractice, testApiConfig, verifyInviteCode, type AiAuthPayload, type AiResult } from "./api";
 import { BrandMark, RenderHumanText, StatusToast } from "./components/Common";
-import { readAsDataUrl, readDocumentText, readPdfText, readPresentationText, readTextFile } from "./fileReaders";
+import { readAsDataUrl, readDocumentText, readPdfText, readPdfForAi, readPresentationText, readTextFile } from "./fileReaders";
 import { getGenerationGuard } from "./generationGuards";
 import { applyInviteVerification, isInviteReady, updateInviteCodeDraft } from "./inviteState";
-import { exportMockExamPdf } from "./pdfExport";
+const exportMockExamPdf = async (content: string, title: string) => (await import("./pdfExport")).exportMockExamPdf(content, title);
+import { BackupPanel } from "./components/BackupPanel";
 import { projectTextDraft, updateProjectTextDraft } from "./projectDrafts";
 import { createId, storage } from "./storage";
 import type {
@@ -31,6 +32,8 @@ import {
   type ModuleStatus
 } from "./utils";
 import { buildAiAuthPayload, resolveEffectiveInviteState } from "./aiAuth";
+import { examStatus } from "./examStatus";
+import { nextCardRound } from "./learningSession";
 import { useCardLearning } from "./useCardLearning";
 
 type ProjectTab = "overview" | "materials" | "plan" | "mock" | "gap" | "module" | "result" | "review";
@@ -146,7 +149,7 @@ export default function App() {
   const [draggingModuleId, setDraggingModuleId] = useState("");
   const [selectedModuleId, setSelectedModuleId] = useState("");
   const [memorizeModuleId, setMemorizeModuleId] = useState("");
-  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+
   const [lastDismissedId, setLastDismissedId] = useState("");
   const [dismissingId, setDismissingId] = useState("");
   const [planMode, setPlanMode] = useState<"modules" | "daily">("modules");
@@ -160,7 +163,7 @@ export default function App() {
     currentCardIndex, setCurrentCardIndex, isCardFlipped, setIsCardFlipped,
     cardDragLock, cardQueue, setCardQueue, streamingCards, isStreamingCards, streamingAbort,
     setStreamingCards, setIsStreamingCards, setStreamingAbort,
-    resetCardProgress, markCard, goToNextCard, goToPrevCard, flipCard,
+    resumeCards, suspendSession, completeSession, saveError, resetCardProgress, markCard, goToNextCard, goToPrevCard, flipCard,
     cancelStreaming, loadSavedCards, saveCardsToModule,
   } = useCardLearning();
   const [showPracticeGrading, setShowPracticeGrading] = useState(false);
@@ -176,6 +179,7 @@ export default function App() {
   const [status, setStatus] = useState("准备好了。");
   const [busyLabel, setBusyLabel] = useState("");
   const [setupStep, setSetupStep] = useState<SetupStep>("intro");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
 
   async function refresh() {
@@ -227,6 +231,15 @@ export default function App() {
     () => tasks.filter((item) => item.project_id === activeProject?.id).sort((a, b) => taskOrder(a, 0) - taskOrder(b, 0)),
     [tasks, activeProject]
   );
+  const dismissedIds = scopedModules.filter(module => module.memorized).map(module => module.id);
+  async function setDismissedIds(ids: string[]) {
+    try {
+      await Promise.all(scopedModules.filter(module => Boolean(module.memorized) !== ids.includes(module.id)).map(module => storage.updateTaskLearning(module.id, {memorized: ids.includes(module.id)})));
+      await refresh();
+    } catch { setStatus("速背进度保存失败，请重试。"); }
+  }
+  useEffect(() => { if (saveError) setStatus(saveError); }, [saveError]);
+  useEffect(() => { setLastDismissedId(""); void suspendSession(); setMemorizeModuleId(""); }, [activeProjectId]);
   const visibleModules = useMemo(
     () => scopedModules.filter(isStudyModule),
     [scopedModules]
@@ -507,7 +520,7 @@ export default function App() {
             updateUploadItem(queueId, { state: "reading", message: "正在快速读取 PDF 文字层" });
             const text = await readPdfText(file);
             content = `PDF 文字层\n${text || "没有提取到文字层。扫描版 PDF 可以后续补充手动重点。"}`;
-            warnings.push("已快速导入 PDF 文字层；扫描图片、图表和公式识别会放到后续单独处理。");
+            warnings.push("已读取 PDF 文字层；图片中的图表和公式不包含在正文里。");
           } else {
             if (isPresentation) {
               updateUploadItem(queueId, { state: "reading", message: "正在读取 PPTX 文字层" });
@@ -555,15 +568,28 @@ export default function App() {
       const imageFiles = selected.filter((file) => !file.name.toLowerCase().endsWith(".pdf"));
       const authPayload = getAuthPayload();
       if (imageFiles.length) assertImageRecognitionSupported(authPayload);
-      const pdfText = (await Promise.all(pdfFiles.map(readPdfText))).join("\n\n");
+      const recognizedParts: string[] = [];
       const imageDataUrls = await Promise.all(imageFiles.map(readAsDataUrl));
-      const recognized = imageDataUrls.length ? await recognizeHandwriting(authPayload, imageDataUrls, handwritingHint) : null;
+      if (imageDataUrls.length) {
+        const result = await recognizeHandwriting(authPayload, imageDataUrls, handwritingHint);
+        if (!result.content.trim()) throw new Error("图片没有识别出正文，请检查清晰度后重试。");
+        recognizedParts.push(result.content);
+      }
+      for (const file of pdfFiles) {
+        assertImageRecognitionSupported(authPayload);
+        await readPdfForAi(file, { maxPages: 6, onBatch: async (batch) => {
+          setBusyLabel(`正在识别 ${file.name} 第 ${batch.startPage}–${batch.endPage} 页 / 共 ${batch.pageCount} 页…`);
+          const result = await recognizeHandwriting(authPayload, batch.pageImages, handwritingHint);
+          if (!result.content.trim()) throw new Error("PDF 没有识别出正文，请检查清晰度后重试。");
+          recognizedParts.push(`第 ${batch.startPage}–${batch.endPage} 页\n${result.content}`);
+        }});
+      }
       await storage.saveMaterial({
         id: createId("material"),
         project_id: activeProject!.id,
         title: handwritingHint.trim() || "手写笔记",
         kind: "handwriting",
-        content: [recognized?.content || "", pdfText].filter(Boolean).join("\n\n") || "这份手写资料暂时没有识别出文本，请手动补充重点。",
+        content: recognizedParts.join("\n\n"),
         image_data_urls: imageDataUrls,
         created_at: nowIso()
       });
@@ -853,6 +879,7 @@ export default function App() {
   }
 
   function openModule(module: StudyTask) {
+    void suspendSession();
     setSelectedModuleId(module.id);
     setActiveTab("module");
   }
@@ -953,19 +980,18 @@ export default function App() {
     setIsStreamingCards(false); setStreamingAbort(null);
     const cards = parseCardsFromAi(fullText);
     if (!cards.length) { setStreamingCards([]); return setStatus("AI 没有返回有效的卡片，请重试。"); }
-    await storage.saveTask({ ...module, cards, updated_at: nowIso() });
+    await storage.saveTask({ ...module, cards, card_session: undefined, updated_at: nowIso() });
     setStatus(`${cards.length} 张学习卡片已生成。`);
     await refresh();
     setStreamingCards([]);
     startCardLearning({ ...module, cards });
   }
 
-  function startCardLearning(module: StudyTask) {
+  async function startCardLearning(module: StudyTask) {
     if (!module.cards?.length) return;
-    const sorted = [...module.cards].sort((a, b) => (a.importance ?? 3) - (b.importance ?? 3));
-    resetCardProgress(sorted);
+    try { if (!await resumeCards(module)) return; } catch { setStatus("无法恢复学习进度，请重试。"); return; }
     setSelectedModuleId(module.id); setShowPracticeGrading(false); setPracticeGradingNote(null);
-    setStatus("开始学习卡片，点击翻卡查看答案。");
+    setStatus("已打开学习卡片，有未完成进度时会接着上次继续。");
   }
 
   function handleCardTap(action: () => void) {
@@ -989,24 +1015,24 @@ export default function App() {
     setCardProgress(prev => ({ ...prev, [card.id]: quality }));
     setIsCardFlipped(false);
     if (currentCardIndex + 1 < cardQueue.length) { setCurrentCardIndex(currentCardIndex + 1); }
-    else { finishRound(); }
+    else { finishRound(card.id, quality); }
   }
 
-  function finishRound() {
-    const roundProgress = { ...cardProgress };
-    const weak = cardQueue.filter(c => roundProgress[c.id] === "uncertain" || roundProgress[c.id] === "unknown");
+  function finishRound(lastId: string, quality: CardProgress) {
+    const {weak, mastered} = nextCardRound(cardQueue, cardProgress, lastId, quality);
     if (weak.length > 0 && cardLearningRound === 1) {
       setCardQueue(weak); setCardLearningRound(2); setCurrentCardIndex(0);
       setIsCardFlipped(false); setCardProgress({});
       setStatus(`第一轮完成！复习 ${weak.length} 张掌握不到位的卡片。`);
     } else {
-      const mastered = cardQueue.filter(c => roundProgress[c.id] === "mastered").length;
+      void completeSession();
       setStatus(`学习完成！掌握 ${mastered}/${cardQueue.length} 张卡片。`);
       exitCardLearning();
     }
   }
 
   function exitCardLearning() {
+    void suspendSession();
     setCardQueue([]); setCardProgress({}); setCardLearningRound(1);
     setCurrentCardIndex(0); setIsCardFlipped(false);
   }
@@ -1300,6 +1326,7 @@ export default function App() {
     return (
       <motion.main className="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.24 }}>
         <StatusToast className={statusClass} message={statusMessage} onCancel={cancelGeneration} />
+        <BackupPanel beforeImport={suspendSession} onImported={async () => { setSelectedModuleId(""); setResultNote(null); setMemorizeModuleId(""); setActiveTab("overview"); await refresh(); }} disabled={busy || isStreamingCards} />
         <section className="home-hero app-section">
           <div className="hero-copy">
             <BrandMark />
@@ -1420,9 +1447,10 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar${projectMenuOpen ? " expanded" : ""}`}>
         <div className="brand">
           <BrandMark compact />
+          <button className="mobile-project-menu secondary" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen(value => !value)}>{projectMenuOpen ? "收起" : "项目与设置"}</button>
         </div>
         <button
           className="secondary"
@@ -1445,6 +1473,7 @@ export default function App() {
         >
           <Sparkle size={18} weight="bold" />初始化页面
         </button>
+        <BackupPanel beforeImport={suspendSession} onImported={async () => { setSelectedModuleId(""); setResultNote(null); setMemorizeModuleId(""); setActiveTab("overview"); await refresh(); }} disabled={busy || isStreamingCards} />
         {showNewProject && <div className="sidebar-form">{projectForm}</div>}
         <div className="project-list">
           {projects.map((project) => (
@@ -1456,13 +1485,14 @@ export default function App() {
                 className="project-open"
                 onClick={() => {
                   setActiveProjectId(project.id);
+                  setProjectMenuOpen(false);
                   setActiveTab("overview");
                   setResultNote(null);
                   setSelectedModuleId("");
                 }}
               >
                 <span>{project.subject}</span>
-                <small>倒计时 {daysLeft(project.exam_date)} 天 · {projectProgress(project.id)}%</small>
+                <small>{examStatus(project.exam_date)} · {projectProgress(project.id)}%</small>
               </button>
               <div className="project-actions">
                 <button className="mini secondary" onClick={() => editProject(project)}><PencilSimple size={15} weight="bold" />编辑</button>
@@ -1495,7 +1525,7 @@ export default function App() {
           {visibleTabs.map(({ tab, label }) => {
             const TabIcon = tabIcons[tab];
             return (
-              <button key={tab} className={activeTab === tab ? "tab active" : "tab"} onClick={() => setActiveTab(tab)}>
+              <button key={tab} className={activeTab === tab ? "tab active" : "tab"} aria-current={activeTab === tab ? "page" : undefined} onClick={() => setActiveTab(tab)}>
                 <TabIcon size={18} weight="duotone" />
                 {label}
               </button>
@@ -1507,7 +1537,7 @@ export default function App() {
           <section className="page-grid app-section">
             <div className="panel metric-panel">
               <span><ClockCountdown size={18} weight="duotone" />考试倒计时</span>
-              <strong>{activeProject ? daysLeft(activeProject.exam_date) : "-"} 天</strong>
+              <strong>{activeProject ? examStatus(activeProject.exam_date) : "未设置日期"}</strong>
               <small>每天不用完美，模块能滚动推进就行。</small>
             </div>
             <div className="panel metric-panel">
@@ -1583,11 +1613,11 @@ export default function App() {
                 <span className="heading-icon"><UploadSimple size={20} weight="duotone" /></span>
                 <div>
                   <h2>资料导入</h2>
-                  <p>先快速收进资料库，扫描页和复杂图表后面再慢慢补。</p>
+                  <p>读取课件正文；扫描件可以通过视觉模型识别。</p>
                 </div>
               </div>
               <label className="file primary-upload"><UploadSimple size={20} weight="bold" />批量上传课件 / 教材 / 往年题（PDF / PPTX / DOC / DOCX）<input type="file" accept=".pdf,.ppt,.pptx,.doc,.docx,.odt,.rtf,.txt,.md,.markdown,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple onChange={(event) => handleFiles(event.target.files)} /></label>
-              <p className="hint">默认会快速读取 PDF 文字层，先把资料放进库里。扫描页、图表和公式这类慢识别，后面单独处理，避免上传时卡太久。</p>
+              <p className="hint">普通 PDF 先读取文字层。没有文字层的扫描件，请从下方“上传手写图片/PDF”识别，需要支持视觉的模型。</p>
               {!!uploadQueue.length && (
                 <div className="upload-queue">
                   {uploadQueue.map((item) => (
